@@ -11,6 +11,12 @@ class User(UserMixin, db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
+
+    # Email verification
+    email_verified = db.Column(db.Boolean, default=False)
+    email_verification_token = db.Column(db.String(120))
+    email_verification_token_expiration = db.Column(db.DateTime)
+
     password_hash = db.Column(db.String(256))
     telegram_chat_ids = db.Column(db.JSON, default={
         'main': None,
@@ -136,6 +142,8 @@ class ItemRelevanceFeedback(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     item_id = db.Column(db.Integer, db.ForeignKey('items.item_id'), nullable=False)
     keyword_id = db.Column(db.Integer, db.ForeignKey('keywords.keyword_id'), nullable=False)
+    required_keywords = db.Column(db.String(255), nullable=True)
+    excluded_keywords = db.Column(db.String(255), nullable=True)
     is_relevant = db.Column(db.Boolean, nullable=True)  # True/False for user feedback
     simple_hybrid_levenshtein_confidence = db.Column(db.Float)  # Optional: Hybrid confidence score
     cosine_similarity = db.Column(db.Float)  # Optional: Cosine similarity score
@@ -150,6 +158,9 @@ class Feedback(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     feedback_type = db.Column(db.String(255))
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    email = db.Column(db.String(120))
+    rating = db.Column(db.Integer)
+    message = db.Column(db.Text)
     cancellation_reasons = db.Column(db.String(255))  # Comma-separated reasons
     cancellation_comment = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))

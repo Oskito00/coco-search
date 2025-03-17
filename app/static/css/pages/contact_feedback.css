@@ -1,0 +1,396 @@
+/* Add this at the top of your CSS */
+:root {
+    --sky-blue: #87CEEB;
+    --sky-blue-light: #E0F6FF;
+}
+
+/* Fix for overscroll background color */
+html {
+    background-color: white;
+  }
+  
+  /* Fix for iOS Safari overscroll background */
+  html, body {
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100vw;
+    margin: 0;
+    padding: 0;
+  }
+  
+  /* Global box-sizing to prevent overflow */
+  *, *:before, *:after {
+    box-sizing: border-box;
+  }
+  
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text-color);
+    background-color: var(--sky-blue-light);
+    min-height: 100vh;
+  }
+
+/* Contact Container */
+.contact-container {
+    max-width: 1200px;
+    margin: 4rem auto;
+    padding: 0 1.5rem;
+}
+
+/* Header Section */
+.contact-header {
+    text-align: center;
+    margin-bottom: 4rem;
+}
+
+.contact-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-bottom: 0.5rem;
+}
+
+.contact-subtitle {
+    font-size: 1.1rem;
+    color: #666;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+/* Grid Layout */
+.contact-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.06);
+    overflow: hidden;
+}
+
+/* Contact Card */
+.contact-card {
+    background: linear-gradient(135deg, #f8fbfe 0%, #f1f7ff 100%);
+    padding: 2.5rem;
+    position: relative;
+    overflow: hidden;
+    border-right: 1px solid rgba(52,152,219,0.1);
+}
+
+.contact-card::before {
+    content: '';
+    position: absolute;
+    top: -50px;
+    right: -50px;
+    width: 100px;
+    height: 100px;
+    background: rgba(52,152,219,0.05);
+    border-radius: 50%;
+}
+
+.contact-card h2 {
+    color: #2c3e50;
+    font-size: 1.5rem;
+    margin-bottom: 2rem;
+    position: relative;
+    padding-bottom: 1rem;
+}
+
+.contact-card h2::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 3px;
+    background: #3498db;
+    border-radius: 2px;
+}
+
+.contact-info {
+    text-align: center;
+}
+
+.contact-icon {
+    width: 48px;
+    height: 48px;
+    fill: #2c3e50;
+    margin-bottom: 1.5rem;
+}
+
+.contact-email {
+    display: inline-block;
+    background: #fff;
+    padding: 1rem 2rem;
+    border-radius: 8px;
+    color: #2c3e50;
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    margin: 1.5rem 0;
+}
+
+.contact-email:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    color: #3498db;
+}
+
+/* Fix email alignment */
+.email-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    justify-content: center;
+    margin: 1.5rem 0;
+}
+
+.mail-icon {
+    width: 24px;
+    height: 24px;
+    fill: #3498db;
+}
+
+/* Fix input overflow */
+.form-group input,
+.form-group textarea {
+    width: calc(100% - 2.4rem); /* Account for padding */
+    box-sizing: border-box;
+}
+
+/* Star Rating - Clean Version */
+.star-rating {
+    display: flex;
+    flex-direction: row-reverse; /* Makes hover work correctly */
+    justify-content: flex-start;
+    gap: 4px;
+}
+
+.star-rating-container {
+    display: flex;
+    flex-direction: row; /* Makes hover work correctly */
+    justify-content: flex-start;
+    gap: 4px;
+}
+
+.star-rating input {
+    display: none;
+}
+
+.star-rating label {
+    cursor: pointer;
+    font-size: 2rem;
+    color: #e0e0e0;
+    transition: all 0.2s ease;
+    line-height: 1;
+}
+
+.star-rating label:hover,
+.star-rating label:hover ~ label,
+.star-rating input:checked ~ label {
+    color: #ffd700;
+}
+
+/* Optional: Add animation */
+@keyframes star-pop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+.star-rating label:hover {
+    animation: star-pop 0.3s ease;
+}
+
+/* Feedback Form */
+.feedback-card {
+    padding: 3rem;
+    background: #fff;
+}
+
+.feedback-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: #444;
+    font-weight: 500;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52,152,219,0.1);
+}
+
+/* Submit Button */
+.submit-btn {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: white;
+    padding: 1rem 2rem;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    transition: all 0.2s ease;
+}
+
+.submit-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(52,152,219,0.3);
+}
+
+.send-icon {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+}
+
+/* Social Links */
+.social-links {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-top: 2rem;
+}
+
+.social-link {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.2rem;
+    background: rgba(255,255,255,0.9);
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    text-decoration: none;
+    color: #2c3e50;
+}
+
+.social-link:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    background: white;
+}
+
+.social-icon {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    fill: #3498db;
+}
+
+.social-link-text {
+    font-weight: 500;
+    font-size: 1rem;
+}
+
+/* Add subtle animation */
+@keyframes card-entry {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.contact-card {
+    animation: card-entry 0.6s ease-out;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .contact-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .contact-card,
+    .feedback-card {
+        padding: 2rem;
+    }
+    
+    .contact-title {
+        font-size: 1.5rem;
+    }
+    
+    .social-link {
+        padding: 1rem;
+        font-size: 0.6rem;
+    }
+    
+    .social-link-text {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 200px;
+    }
+    
+    .social-icon {
+        width: 20px;
+        height: 20px;
+    }
+    
+    /* Specific fix for email overflow */
+    .social-link[href^="mailto:"] .social-link-text {
+        word-break: break-all;
+        white-space: normal;
+        max-width: none;
+    }
+}
+
+/* Flash Messages */
+.flash-messages {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    max-width: 400px;
+    width: 90%;
+}
+
+.flash-message {
+    padding: 1rem 2rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    animation: slideIn 0.3s ease-out;
+}
+
+.flash-success {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.flash-error {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.flash-close {
+    cursor: pointer;
+    font-size: 1.5rem;
+    margin-left: 1rem;
+    opacity: 0.7;
+}
+
+.flash-close:hover {
+    opacity: 1;
+}
+
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}

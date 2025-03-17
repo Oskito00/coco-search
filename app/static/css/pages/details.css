@@ -242,3 +242,125 @@ h1 {
 .item-card {
     animation: fadeIn 0.4s ease forwards;
 }
+
+/* Chart container */
+.chart-container {
+    margin: 2rem 0;
+    padding: 0 20px 20px 0;
+    background: transparent;
+    border-radius: 20px;
+    
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    height: 400px;
+    width: 100%;
+}
+
+/* Default: show chart */
+#price-chart {
+    background: white;
+    padding: 20px;
+    margin: 20px 0;
+    display: block;
+}
+
+/* Hide on mobile */
+@media (max-width: 768px) {
+    .chart-container {
+        display: none !important;
+    }
+}
+
+.apexcharts-tooltip {
+    background: #fff !important;
+    border: 1px solid #ddd !important;
+}
+
+/* Charts grid layout */
+.charts-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr); /* Force 2 equal columns */
+    gap: 2rem;
+    align-items: stretch; /* Make cards same height */
+}
+
+.chart-card {
+    display: flex;
+    border-radius: 20px;
+    flex-direction: column;
+    height: 100%; /* Take full grid cell height */
+}
+
+.chart-container {
+    flex: 1; /* Take remaining vertical space */
+    min-height: 400px; /* Minimum height guarantee */
+}
+
+.chart-title {
+    font-size: 1.25rem;
+    color: var(--text-primary);
+    margin-bottom: 1rem;
+    text-align: center;
+}
+
+.chart-wrapper {
+    height: 400px; /* Fixed height for consistent charts */
+}
+
+/* Responsive layout */
+@media (max-width: 1024px) {
+    .charts-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Mobile: Hide charts and titles */
+@media (max-width: 768px) {
+    .charts-grid,
+    .chart-title {
+        display: none !important;
+    }
+}
+
+/* Desktop: Show charts */
+@media (min-width: 769px) {
+    .charts-grid {
+        display: grid;
+    }
+}
+
+/* Chart Enhancements */
+.chart-card {
+    background: white;
+    padding: 1.5rem;
+
+}
+
+.chart-title {
+    color: #1F2937;
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+    font-weight: 600;
+}
+
+/* Tooltip styling */
+.apexcharts-tooltip {
+    background: #FFFFFF !important;
+    border: 1px solid #E5E7EB !important;
+    border-radius: 8px !important;
+}
+
+.apexcharts-tooltip-title {
+    font-weight: 600 !important;
+    border-bottom: 1px solid #E5E7EB !important;
+}
+
+/* Axis labels */
+.apexcharts-xaxis-label, .apexcharts-yaxis-label {
+    fill: #6B7280 !important;
+    font-size: 0.875rem !important;
+}
+
+.apexcharts-xaxis-title, .apexcharts-yaxis-title {
+    fill: #374151 !important;
+    font-weight: 500 !important;
+}

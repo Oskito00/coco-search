@@ -347,3 +347,47 @@
       font-size: 0.9rem;
     }
   }
+  
+  /* Tag Input System */
+  .tag-input-container {
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  .tags-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  .tag {
+    background: #f1f5f9;
+    border-radius: 4px;
+    padding: 0.25rem 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .tag-remove {
+    cursor: pointer;
+    color: #64748b;
+    font-weight: bold;
+    padding-left: 0.5rem;
+  }
+  
+  .tag-remove:hover {
+    color: #475569;
+  }
+  
+  .tag-input {
+    border: none;
+    outline: none;
+    flex-grow: 1;
+    min-width: 120px;
+    padding: 0.25rem;
+  }

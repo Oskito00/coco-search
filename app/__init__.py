@@ -77,5 +77,8 @@ def create_app(config_class=None):
 
     from app.routes.settings import bp as settings_bp
     app.register_blueprint(settings_bp, url_prefix='/settings')
+
+    from app.routes.contact_feedback import bp as contact_feedback_bp
+    app.register_blueprint(contact_feedback_bp, url_prefix='/contact_feedback')
         
     return app

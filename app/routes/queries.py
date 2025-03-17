@@ -1,11 +1,15 @@
 from flask import Blueprint, jsonify, render_template, redirect, url_for, request, flash, abort
 from flask_login import login_required, current_user
-from sqlalchemy import func
+from sqlalchemy import exists, func
 from app.models import ItemRelevanceFeedback, Keyword, KeywordItems, UserQuery, UserQueryItems, db, Item, copy_item
 from app.forms import QueryForm, DeleteForm  # Create this form if needed
 from flask import current_app
 from datetime import datetime, timezone
+from app.utils.graph_helpers import get_query_price_data
+from app.utils.price_helpers import remove_price_outliers
 from app.utils.query_helpers import update_user_usage
+from app.utils.text_helpers import item_matches_keywords
+import numpy as np
 
 bp = Blueprint('queries', __name__, url_prefix='/queries')
 
@@ -58,6 +62,65 @@ def edit_query(query_id):
                     # Rollback usage change if limit exceeded
                     update_user_usage(current_user, old_interval, 'add')
                     raise ValueError("This interval would exceed your daily limit")
+    
+        
+            if form.required_keywords.data != user_query.required_keywords or form.excluded_keywords.data != user_query.excluded_keywords:
+
+                # 1. Remove non-matching items
+                query_items = UserQueryItems.query.filter_by(query_id=query_id).all()
+                deletions = [
+                    qi for qi in query_items
+                    if not item_matches_keywords(qi.item, form.required_keywords.data, form.excluded_keywords.data)
+                ]
+            
+                # 2. Find new items to add (that match both keyword and new filters)
+                # Get the keyword_id from the user's original query
+                keyword_id = user_query.keyword_id
+
+                # Subquery to find items already linked to this query
+                existing_item_ids = db.session.query(UserQueryItems.item_id)\
+                    .filter(UserQueryItems.query_id == query_id)\
+                    .subquery()
+
+                # Get potential items that match the keyword but aren't linked yet
+                potential_items = db.session.query(Item)\
+                    .join(KeywordItems, Item.item_id == KeywordItems.item_id)\
+                    .outerjoin(
+                        ItemRelevanceFeedback,
+                        (ItemRelevanceFeedback.item_id == Item.item_id) &
+                        (ItemRelevanceFeedback.user_id == current_user.id) &
+                        (ItemRelevanceFeedback.keyword_id == keyword_id)
+                    )\
+                    .filter(
+                        KeywordItems.keyword_id == keyword_id,
+                        ~Item.item_id.in_(existing_item_ids),
+                        # Exclude items marked as irrelevant
+                        db.or_(
+                            ItemRelevanceFeedback.is_relevant.is_(None),
+                            ItemRelevanceFeedback.is_relevant.is_(True)
+                        )
+                    )\
+                    .all()
+                print(f"Potential items: {len(potential_items)}")
+
+                additions = [
+                    UserQueryItems(query_id=query_id, item_id=item.item_id)
+                    for item in potential_items
+                    if item_matches_keywords(
+                        item,
+                        form.required_keywords.data,
+                        form.excluded_keywords.data
+                    )
+                ]
+
+                # 3. Batch process changes
+                for qi in deletions:
+                    db.session.delete(qi)
+            
+                for qi in additions:
+                    db.session.add(qi)
+
+                db.session.commit()
             
             # Update query fields
             form.populate_obj(user_query)
@@ -146,7 +209,11 @@ def create_query():
             historical_items = KeywordItems.query.filter_by(keyword_id=keyword_id).all()
             count = 0
             for keyword_item in historical_items:
-                # Create association in user_query_items
+                feedback = ItemRelevanceFeedback.query.filter_by(user_id=current_user.id, item_id=keyword_item.item_id, keyword_id=keyword_id).first()
+                if feedback:
+                    if feedback.is_relevant == False:
+                        continue
+                # Create association unless the unless the user has marked the item as irrelevant
                 user_query_item = UserQueryItems(
                     query_id=new_user_query.query_id,
                     item_id=keyword_item.item_id,
@@ -224,21 +291,28 @@ def query_details(query_id):
                          .filter_by(query_id=query_id)\
                          .order_by(UserQueryItems.created_at.desc())\
                          .all()
+
+    # Remove outliers using IQR method
+    filtered_items, _ = remove_price_outliers(all_items)
     
-    # Calculate stats using all items
+    # Calculate stats using filtered items
     stats = {
-        'total_items': len(all_items),
-        'avg_price': sum(item.item.price for item in all_items if item.item.price) / len(all_items) if all_items else 0
+        'total_items': len(filtered_items),
+        'avg_price': np.mean([item.item.price for item in filtered_items]) if filtered_items else 0
     }
     
     # Only show first 100 items
-    visible_items = all_items[:100]
+    visible_items = filtered_items[:100]
+
+    price_data = get_query_price_data(query_id)
 
     return render_template('queries/details.html', 
                          query=query, 
                          items=visible_items,
                          stats=stats,
+                         price_data=price_data
                          )
+
 
 @bp.route('/feedback/<string:query_id>/<int:item_id>', methods=['POST'])
 @login_required
@@ -260,21 +334,44 @@ def submit_feedback(query_id, item_id):
     ).first()
 
     if feedback_entry:
+        print("Required keywords:", user_query_item.user_query.required_keywords)
+        print("Excluded keywords:", user_query_item.user_query.excluded_keywords)
         feedback_entry.is_relevant = (feedback == 'relevant')
+        feedback_entry.required_keywords = user_query_item.user_query.required_keywords
+        feedback_entry.excluded_keywords = user_query_item.user_query.excluded_keywords
     else:
+        print("required_keywords:", user_query_item.user_query.required_keywords)
+        print("excluded_keywords:", user_query_item.user_query.excluded_keywords)
         feedback_entry = ItemRelevanceFeedback(
             user_id=current_user.id,
             item_id=user_query_item.item_id,
             keyword_id=user_query_item.user_query.keyword_id,
+            required_keywords=user_query_item.user_query.required_keywords,
+            excluded_keywords=user_query_item.user_query.excluded_keywords,
             is_relevant=(feedback == 'relevant'),
             created_at=datetime.utcnow()
         )
         db.session.add(feedback_entry)
 
-    # Remove from user's view if marked irrelevant
     if feedback == 'irrelevant':
-        print("Removing from user's view")
-        db.session.delete(user_query_item)  # Remove the query-item link
+        ordered_items = UserQueryItems.query.filter_by(query_id=query_id)\
+                            .order_by(UserQueryItems.created_at.asc()).all()
+        item_ids = [str(item.item_id) for item in ordered_items]
+        
+        try:
+            current_idx = item_ids.index(str(item_id))
+            prev_item_id = item_ids[current_idx - 1] if current_idx > 0 else None
+        except ValueError:
+            prev_item_id = None
+
+        db.session.delete(user_query_item)
+        db.session.commit()
+
+        # Handle no previous item case
+        if not prev_item_id:
+            return redirect(url_for('queries.query_details', query_id=query_id))
+            
+        return redirect(url_for('queries.query_details', query_id=query_id) + f"#item-{prev_item_id}")
 
     db.session.commit()
     return redirect(url_for('queries.query_details', query_id=query_id) + f"#item-{item_id}")

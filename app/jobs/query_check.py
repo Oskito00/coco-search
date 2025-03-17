@@ -1,4 +1,6 @@
 from datetime import datetime, timezone, timedelta
+
+from flask_login import current_user
 from app import db, scheduler
 from app.models import Item, ItemRelevanceFeedback, Keyword, KeywordItems, User, UserQuery, UserQueryItems
 from app.utils.levenshtein_string_similarity_helper import calculate_relevance_score
@@ -96,13 +98,22 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
 
     for idx, item_data in enumerate(items):
         # Remove query-specific data from item
-        item_data.pop('query_id', None)
-        item_data.pop('keywords', None)
-
         existing = Item.query.filter_by(ebay_id=item_data['ebay_id']).first()
 
         # Calculate the relevance score for the new item
         relevance_score = calculate_relevance_score(query.keyword.keyword_text, item_data['title'])
+
+        if existing:
+            feedback = ItemRelevanceFeedback.query.filter_by(
+                user_id=query.user_id,
+                item_id=existing.item_id,
+                keyword_id=keyword.keyword_id
+            ).one_or_none()
+            if feedback:
+                app.logger.debug(f"Is relevant: {feedback.is_relevant}")
+            else:
+                feedback = None
+                app.logger.debug(f"No feedback found")
 
         if first_run:
             relevance_scores.append(relevance_score)
@@ -117,8 +128,11 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
                 if not UserQueryItems.query.filter_by(query_id=query.query_id, item_id=existing.item_id).first():
                     app.logger.debug(f"[Process Items] Linking existing item {existing.item_id} to query {query.query_id}")
                     # If not add the link and include in new_items for notification
-                    db.session.add(UserQueryItems(query_id=query.query_id, item_id=existing.item_id, created_at=current_time))
-                    new_items.append(existing)
+                    if feedback and feedback.is_relevant is False:
+                        continue
+                    else:
+                        db.session.add(UserQueryItems(query_id=query.query_id, item_id=existing.item_id, created_at=current_time))
+                        new_items.append(existing)
             else:
                 # If we have never seen this item before, create a new global item
                 valid_data = {k: v for k, v in item_data.items() if k in item_columns}
@@ -160,8 +174,11 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
                 if not UserQueryItems.query.filter_by(query_id=query.query_id, item_id=existing.item_id).first() and relevance_score > query.average_relevance_score - 0.15:
                     app.logger.debug(f"[Process Items] Linking existing item {existing.item_id} to query {query.query_id}")
                     # If not add the link and include in new_items for notification
-                    db.session.add(UserQueryItems(query_id=query.query_id, item_id=existing.item_id, created_at=current_time))
-                    new_items.append(existing)
+                    if feedback and feedback.is_relevant is False:
+                        continue
+                    else:
+                        db.session.add(UserQueryItems(query_id=query.query_id, item_id=existing.item_id, created_at=current_time))
+                        new_items.append(existing)
             else:
                 # If we have never seen this item before, create a new global item
                 valid_data = {k: v for k, v in item_data.items() if k in item_columns}

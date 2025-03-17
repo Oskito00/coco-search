@@ -41,25 +41,31 @@
                 </div>
                 {% endif %}
             
-            {% if form.required_keywords %}
             <div class="form-group">
                 {{ form.required_keywords.label }}
-                {{ form.required_keywords(class="form-control") }}
-                {% if form.required_keywords.errors %}
-                    <div class="errors">{% for error in form.required_keywords.errors %}{{ error }}{% endfor %}</div>
-                {% endif %}
+                <div class="tag-input-container">
+                    <div class="tags-list" id="required-tags">
+                        <!-- Existing tags will be added here by JavaScript -->
+                    </div>
+                    <input type="text" 
+                           class="tag-input" 
+                           id="required-keywords-input"
+                           placeholder="Type and press enter...">
+                </div>
+                {{ form.required_keywords(class="form-control d-none") }}
             </div>
-            {% endif %}
-            
             
             <div class="form-group">
                 {{ form.excluded_keywords.label }}
-                {{ form.excluded_keywords(class="form-control") }}
-                {% if form.excluded_keywords.errors %}
-                    <div class="errors">{% for error in form.excluded_keywords.errors %}{{ error }}{% endfor %}</div>
+                <div class="tag-input-container">
+                    <div class="tags-list" id="excluded-tags"></div>
+                    <input type="text" 
+                           class="tag-input" 
+                           id="excluded-keywords-input"
+                           placeholder="Type and press enter...">
+                </div>
+                {{ form.excluded_keywords(class="form-control d-none") }}
             </div>
-            {% endif %}
-        </div>
 
         <div class="price-range">
             <div class="form-group">
@@ -163,4 +169,68 @@
         </div>
     </form>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    function initTagInput(inputId, tagsId, hiddenFieldId) {
+        const input = document.getElementById(inputId);
+        const tagsContainer = document.getElementById(tagsId);
+        const hiddenInput = document.getElementById(hiddenFieldId);
+
+        function updateHiddenInput() {
+            const tags = Array.from(tagsContainer.querySelectorAll('.tag-text'))
+                            .map(tag => tag.textContent.trim());
+            hiddenInput.value = tags.join(',');
+        }
+
+        function createTag(text) {
+            const tag = document.createElement('div');
+            tag.className = 'tag';
+            tag.innerHTML = `
+                <span class="tag-text">${text}</span>
+                <span class="tag-remove">&times;</span>
+            `;
+            
+            tag.querySelector('.tag-remove').addEventListener('click', () => {
+                tag.remove();
+                updateHiddenInput();
+            });
+            
+            return tag;
+        }
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && input.value.trim()) {
+                e.preventDefault();
+                const text = input.value.trim();
+                if (!text) return;
+                
+                tagsContainer.appendChild(createTag(text));
+                input.value = '';
+                updateHiddenInput();
+            }
+        });
+
+        // Initialize existing values
+        if (hiddenInput.value) {
+            hiddenInput.value.split(',').forEach(tag => {
+                if (tag.trim()) tagsContainer.appendChild(createTag(tag.trim()));
+            });
+        }
+    }
+
+    // Initialize both inputs
+    initTagInput(
+        'required-keywords-input',
+        'required-tags',
+        '{{ form.required_keywords.id }}'
+    );
+    
+    initTagInput(
+        'excluded-keywords-input',
+        'excluded-tags',
+        '{{ form.excluded_keywords.id }}'
+    );
+});
+</script>
 {% endblock %}

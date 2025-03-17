@@ -375,30 +375,22 @@ hr {
 }
 
 /* Modal Override Fixes */
+.modal:not(.show) {
+    display: none !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
 .modal-backdrop {
-    z-index: 1040 !important; /* Should be lower than modal */
-    background-color: rgba(0, 0, 0, 0.4) !important;
+    z-index: 1040 !important;
 }
 
 .modal {
-    z-index: 1050 !important; /* Higher than backdrop */
-    display: block !important; /* Override any hidden states */
-    pointer-events: none; /* Allows click-through to backdrop */
+    z-index: 1050 !important;
+    background-color: rgba(0,0,0,0.4);
 }
 
-.modal.show {
-    display: block !important;
-    pointer-events: auto; /* Re-enable clicks for modal */
-}
-
-.modal-content {
-    pointer-events: all; /* Ensure content is clickable */
-    position: relative;
-    margin: 2rem auto;
-}
-
-/* Add this to preserve body scroll */
-body.modal-open {
+body:not(.modal-open) {
     overflow: auto !important;
     padding-right: 0 !important;
 }

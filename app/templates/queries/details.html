@@ -19,6 +19,20 @@
         </div>
     </div>
 
+    <div class="charts-grid">
+        <!-- Price Chart -->
+        <div class="chart-card">
+            <h2 class="chart-title">Average Price History</h2>
+            <div id="price-chart" class="chart-container"></div>
+        </div>
+
+        <!-- Activity Chart -->
+        <div class="chart-card">
+            <h2 class="chart-title">Listings per Hour</h2>
+            <div id="activity-chart" class="chart-container"></div>
+        </div>
+    </div>
+
     <div class="items-list">
         {% if items|length > 0 %}
             <div class="results-count">
@@ -30,6 +44,7 @@
                     <img src="{{ item.item.image_url }}" alt="Item image" class="item-image">
                     <div class="item-details">
                         <h3>{{ item.item.title }}</h3>
+                        <p class="id">ID: {{ item.item.item_id }}</p>
                         <p class="price">£{{ item.item.price }}</p>
                         
                         <div class="feedback-buttons">
@@ -53,4 +68,189 @@
         {% endif %}
     </div>
 </div>
+
+<!-- Add chart scripts at bottom -->
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const priceData = {{ price_data|tojson }};
+    
+    // Calculate initial date range (7 days)
+    const dates = priceData.map(entry => new Date(entry.date));
+    const maxDate = dates.length ? new Date(Math.max(...dates)) : new Date();
+    const initialMinDate = new Date(maxDate);
+    initialMinDate.setDate(initialMinDate.getDate() - 7); // 7 days back
+
+    // Price Chart Configuration
+    const priceOptions = {
+        chart: {
+            type: 'line',
+            height: 350,
+            zoom: {
+                enabled: true,
+                type: 'x',
+                autoScaleYaxis: true
+            }
+        },
+        series: [{
+            name: "3-Day Average Price",
+            data: priceData.map(item => ({
+                x: new Date(item.date),
+                y: item.price
+            })).sort((a, b) => a.x - b.x)
+        }],
+        colors: ['#10B981'], // Emerald green
+        stroke: {
+            width: 3,
+            curve: 'smooth'
+        },
+        markers: {
+            size: 0 // Remove points
+        },
+        xaxis: {
+            type: 'datetime',
+            min: initialMinDate.getTime(),
+            max: maxDate.getTime(),
+            labels: {
+                datetimeUTC: false
+            }
+        },
+        yaxis: {
+            title: {
+                text: 'Price (GBP)',
+                offsetX: 6,
+                style: {
+                    fontSize: '14px',
+                    color: '#374151'
+                }
+            },
+            labels: {
+                formatter: function(value) {
+                    return '£' + value.toFixed(2);
+                },
+                offsetX: 5
+            },
+            axisBorder: {
+                show: true,
+                color: '#E5E7EB',
+                offsetX: 5
+            }
+        },
+        tooltip: {
+            x: {
+                format: 'dd MMM yyyy'
+            },
+            y: {
+                formatter: function(value) {
+                    return '£' + value.toFixed(2);
+                }
+            }
+        }
+    };
+
+    // Create and render chart
+    const chart = new ApexCharts(document.querySelector("#price-chart"), priceOptions);
+    chart.render();
+
+    // New activity chart code (CORRECTED)
+    const hourlyCounts = {};
+    priceData.forEach(entry => {
+        // Use entry.date instead of entry.hour
+        const date = new Date(entry.date);
+        const hourKey = new Date(
+            date.getFullYear(),
+            date.getMonth(),
+            date.getDate(),
+            date.getHours()
+        ).getTime(); // Use timestamp for x-axis
+        
+        hourlyCounts[hourKey] = (hourlyCounts[hourKey] || 0) + 1;
+    });
+
+    // Add this before the activity chart configuration
+    const hourlyValues = Object.values(hourlyCounts);
+    const averageListings = hourlyValues.length ? 
+        hourlyValues.reduce((a, b) => a + b) / hourlyValues.length : 
+        0;
+
+    // Activity Chart Configuration
+    const activityDates = Object.keys(hourlyCounts).map(ts => parseInt(ts));
+    const maxActivityDate = activityDates.length ? Math.max(...activityDates) : maxDate.getTime();
+    const initialActivityMin = maxActivityDate - (7 * 24 * 60 * 60 * 1000);
+
+    const activityChartOptions = {
+        chart: {
+            type: 'bar',
+            height: 350,
+            toolbar: {
+                show: true,
+                tools: {
+                    download: true,
+                    selection: true,
+                    zoom: true,
+                    zoomin: true,
+                    zoomout: true,
+                    pan: true
+                }
+            },
+            zoom: {
+                enabled: true,
+                type: 'x',
+                autoScaleYaxis: true
+            }
+        },
+        series: [{
+            name: "Listings per Hour",
+            data: Object.entries(hourlyCounts).map(([timestamp, count]) => ({
+                x: parseInt(timestamp),
+                y: count
+            })).sort((a, b) => a.x - b.x)
+        }],
+        xaxis: {
+            type: 'datetime',
+            min: initialActivityMin,
+            max: maxActivityDate,
+            labels: {
+                format: 'dd MMM HH:mm'
+            }
+        },
+        yaxis: {
+            title: { text: 'Number of Listings' }
+        },
+        tooltip: {
+            x: {
+                formatter: function(val) {
+                    return new Date(val).toLocaleString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                }
+            }
+        },
+        plotOptions: {
+            bar: {
+                colors: {
+                    ranges: [{
+                        from: 0,
+                        to: averageListings,
+                        color: '#EF4444' // Red below average
+                    }, {
+                        from: averageListings + 0.1, // Add small buffer to avoid overlap
+                        to: Infinity,
+                        color: '#10B981' // Green above average
+                    }]
+                }
+            }
+        }
+    };
+
+    const activityChart = new ApexCharts(document.querySelector("#activity-chart"), activityChartOptions);
+    activityChart.render();
+});
+</script>
+
+
+
 {% endblock %}

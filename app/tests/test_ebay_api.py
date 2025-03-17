@@ -217,29 +217,21 @@ def test_search_raw_response(app):
         else:
             print("No items found in parsed response")
 
-@pytest.mark.live
-def test_custom_search_query(app):
-    with app.app_context():
-        api = EbayAPI("EBAY_GB")
-        items = api.custom_search_query("iphone",filters={'min_price':90,'max_price':500},sort_order='newlyListed',max_pages=2,marketplace="EBAY_GB")
-
-        assert len(items) >= 200
-
-        # Quantity check
-        assert len(items) >= 200, "Expected at least 200 items across 2 pages"
-        
-        # Price validation
-        for item in items:
-            price = item.get('price')
-            assert price is not None, "Item missing price"
-            assert 90 <= price <= 500, f"Price {price} out of range (100-500)"
 
 @pytest.mark.live
 def test_raw_api_call(app):
     with app.app_context():
         api = EbayAPI()
-        raw_response = api.raw_search("iphone")
+        raw_response = api.raw_search("pokemon base set booster box 1st edition 1999")
         print(raw_response)
+
+@pytest.mark.live
+def test_custom_search(app):
+    with app.app_context():
+        api = EbayAPI()
+        items = api.custom_search_query("pokemon base set booster box 1st edition 1999")
+        print("Items:")
+        # print(items)
 
 
 

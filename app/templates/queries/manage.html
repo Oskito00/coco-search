@@ -20,12 +20,15 @@
         </div>
 
         <div class="pause-all-container">
+            {% if queries %}
             <form method="POST" action="{{ url_for('queries.toggle_all_queries') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <button type="submit" class="button {% if all_active %}btn-pause{% else %}btn-resume{% endif %}">
                     {{ 'Pause All' if all_active else 'Resume All' }}
                 </button>
             </form>
+            {% endif %}
+        </div>
         {% if queries %}
         <div class="query-list-container">
             <div class="query-list-header">
@@ -75,14 +78,14 @@
                             {% endif %}
                         </button>
                     </form>
-                    
                     <a href="{{ url_for('queries.edit_query', query_id=query.query_id) }}" class="action-button edit" title="Edit">
                         <i class="fa-solid fa-pen"></i>
                     </a>
-                    
-                    <form method="POST" action="{{ url_for('queries.delete_query', query_id=query.query_id) }}" onsubmit="return confirm('Are you sure you want to delete this search?');" class="delete-form">
+                    <form method="POST" action="{{ url_for('queries.delete_query', query_id=query.query_id) }}" 
+                        onsubmit="return confirm('Are you sure you want to delete this search?');" 
+                    class="delete-form">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="action-button delete" title="Delete">
+                        <button type="submit"   class="action-button delete" title="Delete" onclick="event.stopPropagation()">
                             <i class="fa-solid fa-trash"></i>
                         </button>
                     </form>

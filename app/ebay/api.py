@@ -250,6 +250,9 @@ class EbayAPI:
             # Serialize auction details if they exist
             serialized_auction = json.dumps(auction_data) if auction_data else None
 
+            start_time = parse_date(item_data.get('itemCreationDate'))
+            end_time = parse_date(item_data.get('itemEndDate'))
+
             items.append({
                 'ebay_id': item_data.get('itemId'),
                 'legacy_id': item_data.get('legacyItemId'),
@@ -264,8 +267,8 @@ class EbayAPI:
                 'location': {
                     'country': item_data.get('itemLocation', {}).get('country'),
                     'postal_code': item_data.get('itemLocation', {}).get('postalCode')},
-                'start_time': item_data.get(parse_date('itemCreationDate')),
-                'end_time': parse_date(item_data.get('itemEndDate')),
+                'start_time': start_time,
+                'end_time': end_time,
                 'buying_options': json.dumps(raw_buying_options),
 
                 # New fields

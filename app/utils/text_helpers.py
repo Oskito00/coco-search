@@ -74,3 +74,33 @@ def filter_items_by_price(items, min_price=None, max_price=None):
             filtered.append(item)
     
     return filtered
+
+def item_matches_keywords(item, required_keywords_str, excluded_keywords_str):
+    """
+    Check if item matches keyword requirements
+    Returns True if item should stay linked, False if should be removed
+    """
+    # Process keyword strings
+    required = [k.strip().lower() for k in required_keywords_str.split(',') if k.strip()]
+    excluded = [k.strip().lower() for k in excluded_keywords_str.split(',') if k.strip()]
+    
+    title_lower = item.title.lower()
+    title_words = title_lower.split()
+    
+    # Check required keywords
+    if required:
+        if not all(
+            any(keyword in word for word in title_words)
+            for keyword in required
+        ):
+            return False
+    
+    # Check excluded keywords
+    if excluded:
+        if any(
+            any(keyword in word for word in title_words)
+            for keyword in excluded
+        ):
+            return False
+            
+    return True
