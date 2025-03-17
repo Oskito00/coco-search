@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 from flask import Flask
-from app.extensions import db, migrate, login_manager, csrf, encryptor
+from app.extensions import db, migrate, login_manager, csrf, encryptor, mail
 from flask_wtf.csrf import CSRFProtect
 import logging
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -45,7 +45,7 @@ def create_app(config_class=None):
     login_manager.init_app(app)
     csrf.init_app(app)
     encryptor.init_app(app)
-
+    mail.init_app(app)
     
     # Create jobstore within app context
     with app.app_context():

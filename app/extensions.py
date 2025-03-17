@@ -1,3 +1,4 @@
+from flask_mail import Mail
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_migrate import Migrate
@@ -9,6 +10,7 @@ migrate = Migrate()
 login_manager = LoginManager()
 csrf = CSRFProtect()
 encryptor = DataEncryptor()
+mail = Mail()
 
 # User loader must be after model definition
 def load_user(user_id):

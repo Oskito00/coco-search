@@ -11,12 +11,6 @@ class User(UserMixin, db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
-
-    # Email verification
-    email_verified = db.Column(db.Boolean, default=False)
-    email_verification_token = db.Column(db.String(120))
-    email_verification_token_expiration = db.Column(db.DateTime)
-
     password_hash = db.Column(db.String(256))
     telegram_chat_ids = db.Column(db.JSON, default={
         'main': None,

@@ -1,8 +1,10 @@
-from flask import Blueprint, app, render_template, redirect, url_for, flash
-from flask_login import login_user, logout_user, login_required
+from datetime import datetime, timedelta
+from flask import Blueprint, app, current_app, render_template, redirect, url_for, flash
+from flask_login import current_user, login_user, logout_user, login_required
 from app.models import User
 from app.forms import LoginForm, RegistrationForm
 from app import db
+from sqlalchemy.exc import SQLAlchemyError
 
 bp = Blueprint('auth', __name__)
 
@@ -24,7 +26,6 @@ def login():
         print(f"User logged in: {user.email}")
         flash('Logged in successfully!', 'success')
         return redirect(url_for('queries.manage_queries'))
-        flash('Invalid email or password', 'danger')
     return render_template('auth/login.html', form=form)
 
 @bp.route('/register', methods=['GET', 'POST'])
@@ -37,20 +38,21 @@ def register():
             print("User already exists")
             flash('This email is already registered. Please use a different email.', 'danger')
             return render_template('auth/register.html', form=form)
-        
         try:
             user = User(email=form.email.data)
             user.set_password(form.password.data)
             db.session.add(user)
             db.session.commit()
+            
             login_user(user)
             print(f"User logged in: {user.email}")
-            flash('Registration successful!', 'success')
+            flash('Logged in successfully!', 'success')
             return redirect(url_for('queries.manage_queries'))
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.session.rollback()
-            flash('Registration failed. Please try again.', 'danger')
-            app.logger.error(f"Registration error: {str(e)}")
+            current_app.logger.error(f"DB commit failed: {str(e)}")
+            flash('Registration failed', 'danger')
+            return redirect(url_for('auth.register'))
     
     return render_template('auth/register.html', form=form)
 
@@ -59,3 +61,4 @@ def register():
 def logout():
     logout_user()
     return redirect(url_for('main.index')) 
+
