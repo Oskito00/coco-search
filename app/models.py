@@ -14,7 +14,7 @@ class User(UserMixin, db.Model):
 
     email_verified = db.Column(db.Boolean, default=False)
     email_verified_on = db.Column(db.DateTime)
-    
+
     password_hash = db.Column(db.String(256))
     telegram_chat_ids = db.Column(db.JSON, default={
         'main': None,
@@ -44,6 +44,8 @@ class User(UserMixin, db.Model):
     pending_effective_date = db.Column(db.DateTime)
     cancellation_requested = db.Column(db.Boolean, default=False)
     last_checkout_session_id = db.Column(db.String(100))
+    grace_period_end = db.Column(db.DateTime)
+    payment_failure_start = db.Column(db.DateTime)
 
     def get_id(self):
         return str(self.id)

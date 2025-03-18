@@ -304,6 +304,18 @@ def cancel_scheduled_downgrade():
         return redirect(url_for('subscription.buy_subscription'))
 
 
+@bp.route('/create-portal-session', methods=['POST'])
+@login_required
+def create_portal_session():
+    stripe.api_key = current_app.config['STRIPE_SECRET_KEY']
+    # Use your existing portal configuration
+    session = stripe.billing_portal.Session.create(
+        customer=current_user.stripe_customer_id,
+        return_url=url_for('subscription.buy_subscription', _external=True)
+    )
+    return redirect(session.url)
+
+
 @bp.route('/payment_success', methods=['GET'])
 def payment_success():
     return render_template('subscription/payment_success.html')

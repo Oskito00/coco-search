@@ -22,6 +22,7 @@
                     {{ current_user.tier['name']|capitalize }}
                 </span>
             </h3>
+
             <p class="mt-2">
                 {% if current_user.cancellation_requested == False %}
                     Renews on:
@@ -31,6 +32,15 @@
                 <strong>
                     {{ current_user.current_period_end.strftime('%Y-%m-%d') if current_user.current_period_end else 'N/A' }}
                 </strong>
+                <div class="payment-management">
+                    <form action="{{ url_for('subscription.create_portal_session') }}" method="POST">
+                        {{ form.hidden_tag() }}
+                        <button type="submit" class="btn btn-payment">
+                            <i class="fas fa-credit-card"></i>
+                            Manage Payment Method
+                        </button>
+                    </form>
+                </div>
             </p>
             {% if current_user.cancellation_requested == True %}
                 <p>You have requested a cancellation of your subscription. Your subscription will end on {{ current_user.current_period_end.strftime('%Y-%m-%d') if current_user.current_period_end else 'N/A' }}.</p>

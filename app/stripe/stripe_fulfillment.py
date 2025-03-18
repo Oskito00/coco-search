@@ -1,9 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import stripe
 from flask import current_app
 from app.ebay import constants
 from app.models import User
 from app.extensions import db
+from app.utils.email import notify_user
 from app.utils.query_helpers import pause_queries_exceeding_limit
 
 #User buys new subscription
@@ -58,6 +59,11 @@ def handle_subscription_updated(event):
         current_price = sub['items']['data'][0]['price']['id']
         previous_price = prev['items']['data'][0]['price']['id']
 
+        # Store previous price in metadata
+        stripe.Subscription.modify(
+            sub['id'],
+            metadata={'previous_price': previous_price}
+        )
 
         if current_price != previous_price:
             user = User.query.filter_by(
@@ -66,7 +72,7 @@ def handle_subscription_updated(event):
             if user:
                 # Immediate upgrade
                 if is_upgrade(current_price, previous_price):
-                  user.tier = get_tier_from_price(current_price)
+                  user.tier = get_tier_from_price(current_price) #Assume payment is successful and revert in payment failed handler
                   user.pending_tier = None  # Clear any pending downgrade
                 if is_downgrade(current_price, previous_price):
                   user.pending_tier = get_tier_from_price(current_price)
@@ -177,25 +183,56 @@ def handle_invoice_paid(event):
     
     db.session.commit()
 
-
 def handle_invoice_payment_failed(event):
-    invoice = event['data']['object']
-    sub = stripe.Subscription.retrieve(invoice.subscription)
-    
-    # Revert tier if payment fails
-    user = User.query.filter_by(
-        stripe_subscription_id=sub.id
-    ).first()
-    
-    if user:
-        previous_price = sub.items.data[0].price.id
-        print("Previous price: ", previous_price)
-        user.tier = get_tier_from_price(previous_price)
+    try:
+        invoice = event['data']['object']
+        sub = stripe.Subscription.retrieve(invoice['subscription'])
+        user = User.query.filter_by(stripe_subscription_id=sub.id).first()
+
+        if not user:
+            return
+
+        attempt_count = invoice.get('attempt_count', 1)
+        max_attempts = 3  # Stripe's default retry count
+        
+        # Store first failure timestamp
+        if attempt_count == 1:
+            user.payment_failure_start = datetime.utcnow()
+            db.session.commit()
+
+        # Check retry status
+        if attempt_count < max_attempts:
+            # In grace period - maintain access
+            user.grace_period_end = datetime.utcnow() + timedelta(days=3)
+            message = f"Hi, {user.email}, just to let you know that your payment for your subscription has failed (attempt {attempt_count}/{max_attempts}). Please update payment method to ensure you don't lose access to your premium features."
+            notify_user(user, message)
+            return  # Don't downgrade yet
+            
+        # Final failure handling
+        previous_price = sub.metadata.get('previous_price')
+        current_price = sub['items']['data'][0]['price']['id']
+
+        if previous_price and is_upgrade(current_price, previous_price):
+            user.tier = get_tier_from_price(previous_price)
+            message = f"Hi, {user.email}, your subscription upgrade failed after {max_attempts} attempts. Reverted to previous tier."
+        else:
+            user.tier = {'name': 'free', 'query_limit': 0}
+            user.subscription_status = 'canceled'
+            message = f"Hi, {user.email}, your subscription was canceled after {max_attempts} failed payment attempts. Downgraded to free tier."
+
+        # Clear payment fields
+        user.pending_tier = None
+        user.pending_effective_date = None
+        user.grace_period_end = None
+        user.payment_failure_start = None
+        
         pause_queries_exceeding_limit(user)
         db.session.commit()
-        # TODO: Send email notification, notify user that their subscription has been downgraded because of payment failure
-
-
+        notify_user(user, message)
+        
+    except Exception as e:
+        current_app.logger.error(f"Payment failure error: {str(e)}")
+        raise
 #HELPER FUNCTIONS
 
 def get_tier_from_price(price_id):

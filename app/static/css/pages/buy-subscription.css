@@ -487,3 +487,22 @@ body:not(.modal-open) {
         margin-bottom: 0;
     }
 }
+
+.btn-payment {
+    background: #3182ce;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background 0.3s ease;
+}
+
+.btn-payment:hover {
+    background: #4494df;
+}
+
+.btn-payment i {
+    margin-right: 8px;
+}
