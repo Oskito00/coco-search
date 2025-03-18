@@ -57,7 +57,8 @@ def handle_subscription_updated(event):
     if 'items' in prev:
         current_price = sub['items']['data'][0]['price']['id']
         previous_price = prev['items']['data'][0]['price']['id']
-        
+
+
         if current_price != previous_price:
             user = User.query.filter_by(
                 stripe_customer_id=sub.customer
@@ -104,19 +105,29 @@ def handle_subscription_updated(event):
 #The subscription expires and is deleted
 
 def handle_subscription_deleted(event):
-      sub = event['data']['object']
-      if sub.cancel_at_period_end:
-          user = User.query.filter_by(
-              stripe_customer_id=sub.customer
-          ).first()
-          if user:
-              print("User found, cancelling subscription")
-              user.subscription_status = 'canceled'
-              user.tier = {'name': 'free', 'query_limit': 0}
-              pause_queries_exceeding_limit(user)
-              user.current_period_end = None
-              user.cancellation_requested = False
-              db.session.commit()
+    try:
+        sub = event['data']['object']
+        customer_id = sub['customer']  # Access as dictionary
+        
+        user = User.query.filter_by(stripe_customer_id=customer_id).first()
+        if not user:
+            current_app.logger.error(f"User not found for customer {customer_id}")
+            return
+        
+        user.subscription_status = 'canceled'
+        user.tier = {'name': 'free', 'query_limit': 0}
+        user.current_period_end = None
+        user.cancellation_requested = False
+        
+        # Handle query pausing
+        pause_queries_exceeding_limit(user)
+        
+        db.session.commit()
+        current_app.logger.info(f"Canceled subscription for user {user.id}")
+        
+    except Exception as e:
+        current_app.logger.error(f"Subscription deletion error: {str(e)}")
+        raise  # Re-raise to trigger 500 response
 
 def get_or_create_user(checkout_session):
   """Find or create user based on checkout session"""
@@ -178,6 +189,7 @@ def handle_invoice_payment_failed(event):
     
     if user:
         previous_price = sub.items.data[0].price.id
+        print("Previous price: ", previous_price)
         user.tier = get_tier_from_price(previous_price)
         pause_queries_exceeding_limit(user)
         db.session.commit()

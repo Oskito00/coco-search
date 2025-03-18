@@ -48,7 +48,7 @@ def pause_queries_exceeding_limit(user):
     for query in queries:
         if user.query_usage <= user.tier['query_limit']:
             break
-        print(f"Pausing query {query.id}")
+        print(f"Pausing query {query.query_id}")
         query.is_active = False
         user.query_usage = user.query_usage - calculate_daily_runs(query.check_interval)
         print(f"User query usage after pausing: {user.query_usage} compared to limit of {user.tier['query_limit']}")

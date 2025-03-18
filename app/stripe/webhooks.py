@@ -37,7 +37,8 @@ def my_webhook_view():
   return jsonify({'status': 'success'}), 200
 
 def handle_event(event):
-    handler_map = {
+    try:
+        handler_map = {
     # Core Subscription Events
     # 'checkout.session.completed': handle_checkout_completed,
     'customer.subscription.created': handle_new_subscription,
@@ -52,9 +53,15 @@ def handle_event(event):
     # 'customer.updated': handle_customer_updated,
     # 'customer.deleted': handle_customer_deleted,
 }
-    
-    handler = handler_map.get(event['type'])
-    if handler:
-        handler(event)
-    else:
-        print(f"No handler for {event['type']}")
+        
+        handler = handler_map.get(event['type'])
+        if handler:
+            handler(event)
+            return jsonify({'status': 'success'}), 200
+        else:
+            current_app.logger.warning(f"Unhandled event type: {event['type']}")
+            return jsonify({'status': 'unhandled'}), 200
+            
+    except Exception as e:
+        current_app.logger.error(f"Webhook error: {str(e)}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500

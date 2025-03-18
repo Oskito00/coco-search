@@ -179,6 +179,18 @@ def create_query():
         form.check_interval.data = 5  # Default to 5 minutes
     if form.validate_on_submit():
         try:
+
+            # Update the user's query usage based on their query
+            try:
+                if not update_user_usage(current_user, form.check_interval.data, 'add'):
+                    flash('This query would exceed your daily limit', 'danger')
+                    return render_template('queries/create.html', form=form)
+                
+            except ValueError as e:
+                db.session.rollback()
+                flash(str(e), 'danger')
+                return render_template('queries/create.html', form=form)
+            
             # Check if keyword exists (case-insensitive)
             existing = Keyword.query.filter(
                 db.func.lower(Keyword.keyword_text) == db.func.lower(form.keywords.data.strip())
@@ -194,14 +206,24 @@ def create_query():
                 else:
                     keyword_id = existing.keyword_id
                 
-                # Create UserQuery entry using form data
+                # Prevent duplicate queries
+                existing_query = UserQuery.query.filter(
+                    UserQuery.user_id == current_user.id,
+                    UserQuery.keyword_id == keyword_id
+                ).first()
+                
+                if existing_query:
+                    flash('You already have a query with this keyword', 'danger')
+                    return render_template('queries/create.html', form=form)
+                
+                # Proceed with query creation
                 new_user_query = UserQuery()
-                form.populate_obj(new_user_query)  # Auto-map form fields to model attributes
-                # Set additional fields not in form
+                form.populate_obj(new_user_query)
                 new_user_query.user_id = current_user.id
                 new_user_query.keyword_id = keyword_id
                 new_user_query.created_at = datetime.now(timezone.utc)
                 new_user_query.is_active = True
+                
                 db.session.add(new_user_query)
                 db.session.commit()
             
@@ -225,15 +247,6 @@ def create_query():
             if count > 0:
                 db.session.commit()
                 print(f"Loaded {count} historical items")
-
-            # Update the user's query usage based on their query
-            try:
-                if not update_user_usage(current_user, form.check_interval.data, 'add'):
-                    flash('This query would exceed your daily limit', 'danger')
-                    return render_template('queries/create.html', form=form)
-            except ValueError as e:
-                flash(str(e), 'danger')
-                return render_template('queries/create.html', form=form)
             
             return redirect(url_for('queries.manage_queries'))
         except Exception as e:

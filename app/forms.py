@@ -16,6 +16,21 @@ class LoginForm(FlaskForm):
     ])
     submit = SubmitField('Sign In')
 
+class ForgotPasswordForm(FlaskForm):
+    email = StringField('Email', validators=[
+        DataRequired(message="Email is required"),
+        Email(message="Invalid email address")
+    ])
+    submit = SubmitField('Reset Password')
+
+class ResetPasswordForm(FlaskForm):
+    password = PasswordField('New Password', validators=[DataRequired()])
+    confirm_password = PasswordField('Confirm Password', validators=[
+        DataRequired(), 
+        EqualTo('password', message='Passwords must match')
+    ])
+    submit = SubmitField('Reset Password')
+
 class RegistrationForm(FlaskForm):
     email = StringField('Email', validators=[
         DataRequired(message='Email is required'),

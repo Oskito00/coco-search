@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 from flask import Flask
-from app.extensions import db, migrate, login_manager, csrf, encryptor, mail
+from app.extensions import db, migrate, login_manager, csrf, encryptor, mail, limiter
 from flask_wtf.csrf import CSRFProtect
 import logging
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -46,7 +46,7 @@ def create_app(config_class=None):
     csrf.init_app(app)
     encryptor.init_app(app)
     mail.init_app(app)
-    
+    limiter.init_app(app)
     # Create jobstore within app context
     with app.app_context():
         app.scheduler_jobstore = SQLAlchemyJobStore(engine=db.get_engine())

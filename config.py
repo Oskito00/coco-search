@@ -30,7 +30,6 @@ class Config:
     }
     LOG_LEVEL = 'INFO'
     TESTING = False
-    MAIL_DEFAULT_SENDER = ('Oscar Alberigo', 'oscar.alberigo@gmail.com')
 
     #Stripe
     STRIPE_PRICE_INDIVIDUAL = os.getenv('STRIPE_PRICE_INDIVIDUAL')
@@ -40,15 +39,20 @@ class Config:
     STRIPE_PUBLISHABLE_KEY = os.getenv('STRIPE_PUBLISHABLE_KEY')
     STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')
 
-    # mailtrap
-    MAIL_SERVER = os.getenv('MAIL_SERVER', 'sandbox.smtp.mailtrap.io')
-    MAIL_PORT = int(os.getenv('MAIL_PORT', 2525))
-    MAIL_USE_TLS = os.getenv('MAIL_USE_TLS', 'True').lower() in ['true', '1']
-    MAIL_USERNAME = os.getenv('MAIL_USERNAME', '994e2e68ca31d4')
-    MAIL_PASSWORD = os.getenv('MAIL_PASSWORD', '********18c4')
-    MAIL_DEFAULT_SENDER = os.getenv('MAIL_DEFAULT_SENDER', 'oscar.alberigo@gmail.com')
-    MAIL_SUPPRESS_SEND = True
-    MAIL_DEBUG = True
+    #Gmail authentication
+    SECURITY_PASSWORD_SALT = 'my_precious_two'
+    MAIL_SERVER = 'smtp.googlemail.com'
+    MAIL_PORT = 465
+    MAIL_USE_TLS = False
+    MAIL_USE_SSL = True
+
+    #Gmail authentication
+    MAIL_USERNAME = os.getenv('MAIL_USERNAME')
+    MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
+
+    #mail accounts 
+    MAIL_DEFAULT_SENDER = ('Oscar Alberigo', 'oscar.alberigo@gmail.com')
+
 
     @classmethod
     def verify(cls):
