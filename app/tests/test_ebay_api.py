@@ -221,8 +221,8 @@ def test_search_raw_response(app):
 @pytest.mark.live
 def test_raw_api_call(app):
     with app.app_context():
-        api = EbayAPI()
-        raw_response = api.raw_search("pokemon base set booster box 1st edition 1999")
+        api = EbayAPI(marketplace='EBAY_IT')
+        raw_response = api.raw_search("maglietta nike", filters={'item_location': 'IT'})
         print(raw_response)
 
 @pytest.mark.live
@@ -230,7 +230,7 @@ def test_custom_search(app):
     with app.app_context():
         api = EbayAPI()
         items = api.custom_search_query("pokemon base set booster box 1st edition 1999")
-        print("Items:")
+        print("Items:", items)
         # print(items)
 
 

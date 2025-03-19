@@ -17,13 +17,18 @@ html {
 
 /* Core styling */
 body {
-    background-color: var(--sky-blue-light);
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
+.background {
+    background-color: var(--sky-blue-light);
+}
+
 .subscription-container {
-    max-width: 1200px;
     margin: 0 auto;
+    max-width: 1000px;
     padding: 3.5rem 1rem;
 }
 
@@ -500,7 +505,7 @@ body:not(.modal-open) {
 }
 
 .btn-payment:hover {
-    background: #4494df;
+    background: #3182ce;
 }
 
 .btn-payment i {

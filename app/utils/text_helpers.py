@@ -1,6 +1,13 @@
 import re
 from decimal import Decimal, InvalidOperation
+import unicodedata
 
+def remove_accents(text):
+    """Remove accents using multiple methods"""
+    # Method 1: Unicode normalization
+    text = unicodedata.normalize('NFKD', text)
+    text = text.encode('ascii', 'ignore').decode('utf-8')
+    return text
 
 def filter_items_by_keywords(items, required_keywords, excluded_keywords, min_price=None, max_price=None):
     # Convert None to empty string for safety
@@ -8,15 +15,15 @@ def filter_items_by_keywords(items, required_keywords, excluded_keywords, min_pr
     excluded = excluded_keywords or ''
     
     # Normalize inputs
-    req_kws = {kw.strip().lower() for kw in required.split(',') if kw.strip()}
-    excl_kws = {ekw.strip().lower() for ekw in excluded.split(',') if ekw.strip()}
+    req_kws = {remove_accents(kw.strip().lower()) for kw in required.split(',') if kw.strip()}
+    excl_kws = {remove_accents(ekw.strip().lower()) for ekw in excluded.split(',') if ekw.strip()}
     
     # Preprocess titles with null handling
     processed = []
     for item in items:
         # Handle null title/description
-        title = (item.get('title') or '').lower()
-        description = (item.get('description') or '').lower()
+        title = remove_accents((item.get('title') or '').lower())
+        description = remove_accents((item.get('description') or '').lower())
         full_text = f"{title} {description}"
         
         # Split into words from both title and description
@@ -81,10 +88,10 @@ def item_matches_keywords(item, required_keywords_str, excluded_keywords_str):
     Returns True if item should stay linked, False if should be removed
     """
     # Process keyword strings
-    required = [k.strip().lower() for k in required_keywords_str.split(',') if k.strip()]
-    excluded = [k.strip().lower() for k in excluded_keywords_str.split(',') if k.strip()]
+    required = [remove_accents(k.strip().lower()) for k in required_keywords_str.split(',') if k.strip()]
+    excluded = [remove_accents(k.strip().lower()) for k in excluded_keywords_str.split(',') if k.strip()]
     
-    title_lower = item.title.lower()
+    title_lower = remove_accents(item.title.lower())
     title_words = title_lower.split()
     
     # Check required keywords

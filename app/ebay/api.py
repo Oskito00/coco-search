@@ -270,7 +270,6 @@ class EbayAPI:
                 'start_time': start_time,
                 'end_time': end_time,
                 'buying_options': json.dumps(raw_buying_options),
-
                 # New fields
                 'auction_details': serialized_auction,
                 'categories': serialized_categories,

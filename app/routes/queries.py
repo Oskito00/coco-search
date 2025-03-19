@@ -228,7 +228,19 @@ def create_query():
                 db.session.commit()
             
             #Load historical data if exists
-            historical_items = KeywordItems.query.filter_by(keyword_id=keyword_id).all()
+            target_country = new_user_query.item_location
+
+            # Filter historical items by country
+            historical_items = (
+    KeywordItems.query
+    .join(Item, KeywordItems.item_id == Item.item_id)
+    .filter(
+        KeywordItems.keyword_id == keyword_id,
+        Item.location_country == target_country
+    )
+    .all()
+)
+            
             count = 0
             for keyword_item in historical_items:
                 feedback = ItemRelevanceFeedback.query.filter_by(user_id=current_user.id, item_id=keyword_item.item_id, keyword_id=keyword_id).first()

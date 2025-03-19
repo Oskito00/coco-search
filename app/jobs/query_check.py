@@ -137,6 +137,12 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
                 # If we have never seen this item before, create a new global item
                 valid_data = {k: v for k, v in item_data.items() if k in item_columns}
                 new_item = Item(**valid_data)
+                app.logger.debug(f"Location data: {item_data.get('location')}")
+                app.logger.debug(f"Country: {item_data.get('location', {}).get('country')}")
+                app.logger.debug(f"Postal Code: {item_data.get('location', {}).get('postal_code')}")
+                
+                new_item.location_country = item_data.get('location', {}).get('country')
+                new_item.postal_code = item_data.get('location', {}).get('postal_code')
                 db.session.add(new_item)
                 new_items.append(new_item)
                 item = new_item
@@ -183,6 +189,12 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
                 # If we have never seen this item before, create a new global item
                 valid_data = {k: v for k, v in item_data.items() if k in item_columns}
                 new_item = Item(**valid_data)
+                app.logger.debug(f"Location data: {item_data.get('location')}")
+                app.logger.debug(f"Country: {item_data.get('location', {}).get('country')}")
+                app.logger.debug(f"Postal Code: {item_data.get('location', {}).get('postal_code')}")
+                
+                new_item.location_country = item_data.get('location', {}).get('country')
+                new_item.postal_code = item_data.get('location', {}).get('postal_code')
                 db.session.add(new_item)
                 new_items.append(new_item)
                 item = new_item
@@ -275,12 +287,18 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
                     ending_auctions.append(item)
                     user_query_item.auction_ending_notification_sent = True
     
-    #Updates the average relevance score for the query (only on the first run)
+    # Updates the average relevance score for the query (only on the first run)
     if first_run:
+        score_count = len(relevance_scores)
+        if score_count > 0:
+            average_score = sum(relevance_scores) / score_count
+        else:
+            average_score = 0  # Or handle as appropriate
+            
         UserQuery.query.filter_by(query_id=query.query_id).update({
-            'average_relevance_score': sum(relevance_scores) / len(relevance_scores)
+            'average_relevance_score': average_score
         })
-        app.logger.debug(f"[Process Items] Updated relevance average score for query {query.query_id} to {query.average_relevance_score}")
+        app.logger.debug(f"[Process Items] Updated relevance average score for query {query.query_id} to {average_score}")
                 
 
     try:

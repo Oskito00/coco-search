@@ -2,6 +2,7 @@
 
 {% block styles %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/pages/details.css') }}">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 {% endblock %}
 
 {% block content %}
@@ -14,7 +15,14 @@
             <span class="stat-label">Total Items</span>
         </div>
         <div class="stat-item">
-            <span class="stat-value">£{{ "%.2f"|format(stats.avg_price) }}</span>
+            <span class="stat-value">
+                {{ "%.2f"|format(stats.avg_price) }} 
+                {% if items and items[0].item.currency %}
+                    {{ items[0].item.currency }}
+                {% else %}
+                    GBP
+                {% endif %}
+            </span>
             <span class="stat-label">Average Price</span>
         </div>
     </div>
@@ -45,7 +53,9 @@
                     <div class="item-details">
                         <h3>{{ item.item.title }}</h3>
                         <p class="id">ID: {{ item.item.item_id }}</p>
-                        <p class="price">£{{ item.item.price }}</p>
+                        <p class="url">URL: <a href="{{ item.item.url }}" target="_blank">{{ item.item.url }}</a></p>
+                        <p class="location">Location: {{ item.item.location_country }} {{ item.item.postal_code }}</p>
+                        <p class="price">{{ item.item.price }}{{ item.item.currency }}</p>
                         
                         <div class="feedback-buttons">
                             <form action="{{ url_for('queries.submit_feedback', query_id=query.query_id, item_id=item.item_id) }}#item-{{ item.item_id }}" method="POST">
@@ -71,13 +81,18 @@
 
 <!-- Add chart scripts at bottom -->
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const priceData = {{ price_data|tojson }};
+    const chartCurrency = priceData.length > 0 ? priceData[0].currency : 'GBP';
+
     
     // Calculate initial date range (7 days)
     const dates = priceData.map(entry => new Date(entry.date));
     const maxDate = dates.length ? new Date(Math.max(...dates)) : new Date();
+
     const initialMinDate = new Date(maxDate);
     initialMinDate.setDate(initialMinDate.getDate() - 7); // 7 days back
 
@@ -117,7 +132,7 @@ document.addEventListener('DOMContentLoaded', function() {
         },
         yaxis: {
             title: {
-                text: 'Price (GBP)',
+                text: `Price (${chartCurrency})`,
                 offsetX: 6,
                 style: {
                     fontSize: '14px',
@@ -126,7 +141,7 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             labels: {
                 formatter: function(value) {
-                    return '£' + value.toFixed(2);
+                    return chartCurrency + value.toFixed(2);
                 },
                 offsetX: 5
             },
@@ -142,7 +157,7 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             y: {
                 formatter: function(value) {
-                    return '£' + value.toFixed(2);
+                    return chartCurrency + value.toFixed(2);
                 }
             }
         }

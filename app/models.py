@@ -69,8 +69,8 @@ class Item(db.Model):
     seller = db.Column(db.String(100))
     seller_rating = db.Column(db.String(20))
     condition = db.Column(db.String(50))
-    location_country = db.Column(db.String(10)) 
-    postal_code = db.Column(db.String(20))
+    location_country = db.Column(db.String(2)) 
+    postal_code = db.Column(db.String(10))
     start_time = db.Column(db.DateTime)
     end_time = db.Column(db.DateTime)
     buying_options = db.Column(db.Text)
@@ -129,12 +129,15 @@ class Keyword(db.Model):
     __tablename__ = 'keywords'
     keyword_id = db.Column(db.Integer, primary_key=True)
     keyword_text = db.Column(db.String(255), nullable=False)
+    average_relevance_score = db.Column(db.Float, default=0.3)
 
 class KeywordItems(db.Model):
     __tablename__ = 'keyword_items'
     keyword_id = db.Column(db.Integer, db.ForeignKey('keywords.keyword_id'), primary_key=True, nullable=False)
     item_id = db.Column(db.Integer, db.ForeignKey('items.item_id'), primary_key=True, nullable=False)
     found_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+
+    item = db.relationship('Item', backref='keyword_associations')
 
 # Feedback data to train the ML model
 class ItemRelevanceFeedback(db.Model):
