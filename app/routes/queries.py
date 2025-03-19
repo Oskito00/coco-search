@@ -232,14 +232,14 @@ def create_query():
 
             # Filter historical items by country
             historical_items = (
-    KeywordItems.query
-    .join(Item, KeywordItems.item_id == Item.item_id)
-    .filter(
-        KeywordItems.keyword_id == keyword_id,
-        Item.location_country == target_country
-    )
-    .all()
-)
+            KeywordItems.query
+            .join(Item, KeywordItems.item_id == Item.item_id)
+            .filter(
+                KeywordItems.keyword_id == keyword_id,
+                    Item.location_country == target_country
+                )
+                    .all()
+            )
             
             count = 0
             for keyword_item in historical_items:

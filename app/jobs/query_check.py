@@ -89,9 +89,6 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
     ending_auctions = []
     item_columns = {c.key for c in inspect(Item).mapper.column_attrs}
 
-    if first_run:
-        relevance_scores = []
-
     # Get the keyword once at the start
     keyword = query.keyword
     current_time = datetime.now(timezone.utc)
@@ -99,9 +96,6 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
     for idx, item_data in enumerate(items):
         # Remove query-specific data from item
         existing = Item.query.filter_by(ebay_id=item_data['ebay_id']).first()
-
-        # Calculate the relevance score for the new item
-        relevance_score = calculate_relevance_score(query.keyword.keyword_text, item_data['title'])
 
         if existing:
             feedback = ItemRelevanceFeedback.query.filter_by(
@@ -116,7 +110,6 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
                 app.logger.debug(f"No feedback found")
 
         if first_run:
-            relevance_scores.append(relevance_score)
             # Find existing item globally (not per-query)
             if existing:
                 app.logger.debug(f"[Process Items] Item {idx+1}/{len(items)}: Existing item found (ID: {existing.item_id})")
@@ -131,6 +124,8 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
                     if feedback and feedback.is_relevant is False:
                         continue
                     else:
+                        existing.location_country = item_data.get('location', {}).get('country')
+                        existing.postal_code = item_data.get('location', {}).get('postal_code')
                         db.session.add(UserQueryItems(query_id=query.query_id, item_id=existing.item_id, created_at=current_time))
                         new_items.append(existing)
             else:
@@ -173,16 +168,18 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
             if existing:
                 app.logger.debug(f"[Process Items] Item {idx+1}/{len(items)}: Existing item found (ID: {existing.item_id})")
                 # Check if item needs to be linked to keyword
-                if not KeywordItems.query.filter_by(keyword_id=keyword.keyword_id, item_id=existing.item_id).first() and relevance_score > query.average_relevance_score - 0.15:
+                if not KeywordItems.query.filter_by(keyword_id=keyword.keyword_id, item_id=existing.item_id).first():
                     app.logger.debug(f"[Process Items] Linking existing item {existing.item_id} to keyword {keyword.keyword_text}")
                     db.session.add(KeywordItems(keyword_id=keyword.keyword_id, item_id=existing.item_id))
                 # Check if the item is already linked to the query
-                if not UserQueryItems.query.filter_by(query_id=query.query_id, item_id=existing.item_id).first() and relevance_score > query.average_relevance_score - 0.15:
+                if not UserQueryItems.query.filter_by(query_id=query.query_id, item_id=existing.item_id).first():
                     app.logger.debug(f"[Process Items] Linking existing item {existing.item_id} to query {query.query_id}")
                     # If not add the link and include in new_items for notification
                     if feedback and feedback.is_relevant is False:
                         continue
                     else:
+                        existing.location_country = item_data.get('location', {}).get('country')
+                        existing.postal_code = item_data.get('location', {}).get('postal_code')
                         db.session.add(UserQueryItems(query_id=query.query_id, item_id=existing.item_id, created_at=current_time))
                         new_items.append(existing)
             else:
@@ -204,16 +201,16 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
                 db.session.flush()
             
                 # Link to keyword
-                if relevance_score > query.average_relevance_score - 0.15:  
-                    db.session.add(KeywordItems(
+                  
+                db.session.add(KeywordItems(
                     keyword_id=keyword.keyword_id,
                     item_id=new_item.item_id,
                     found_at=current_time
                     ))
 
                 # Link to user query
-                if relevance_score > query.average_relevance_score - 0.15:
-                    db.session.add(UserQueryItems(
+                
+                db.session.add(UserQueryItems(
                     query_id=query.query_id,
                     item_id=new_item.item_id,
                     auction_ending_notification_sent=False,
@@ -221,35 +218,9 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
                     ))
             
                 db.session.commit()
-        
-        if existing:
-            item = existing
 
-        # Create/update data for ML training
-        feedback_data = {
-                'user_id': query.user_id,
-            'item_id': item.item_id,  # Use existing.item_id or new_item.item_id
-            'keyword_id': keyword.keyword_id,
-            'simple_hybrid_levenshtein_confidence': relevance_score,
-            }
 
-        feedback_entry = ItemRelevanceFeedback.query.filter_by(
-                user_id=query.user_id,
-                item_id=item.item_id,
-                keyword_id=keyword.keyword_id
-            ).first()
-
-        if feedback_entry:
-            # Update ML scores only, preserve user feedback
-            feedback_entry.simple_hybrid_levenshtein_confidence = relevance_score
-        else:
-            app.logger.debug(f"[Process Items] Item {idx+1}/{len(items)}: Item ID: {item.item_id} Keywords: {keyword.keyword_text}")
-            # New entry with simple relevance score
-            new_feedback = ItemRelevanceFeedback(**feedback_data)
-            db.session.add(new_feedback)
-        
-
-        # Update existing item if needed
+        #Update existing item if needed
         if existing:
             update_count = 0
             for key in item_columns - {'item_id', 'created_at'}:
@@ -259,10 +230,11 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
                     existing.last_updated = current_time
             if update_count > 0:
                 updated_items.append(existing)
+                app.logger.debug(f"Updated for item {existing.item_id}")
                 app.logger.debug(f"[Process Items] Updated {update_count} fields for item {existing.item_id}")
 
-        # Track price changes (using first query that found the item)
-        if full_scan and existing:
+        # Track price changes using the existing price that the item was found at
+        if existing:
             old_price = existing.price
             new_price = item_data.get('price')
             if new_price and old_price and new_price < old_price:
@@ -287,18 +259,7 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
                     ending_auctions.append(item)
                     user_query_item.auction_ending_notification_sent = True
     
-    # Updates the average relevance score for the query (only on the first run)
-    if first_run:
-        score_count = len(relevance_scores)
-        if score_count > 0:
-            average_score = sum(relevance_scores) / score_count
-        else:
-            average_score = 0  # Or handle as appropriate
-            
-        UserQuery.query.filter_by(query_id=query.query_id).update({
-            'average_relevance_score': average_score
-        })
-        app.logger.debug(f"[Process Items] Updated relevance average score for query {query.query_id} to {average_score}")
+    
                 
 
     try:

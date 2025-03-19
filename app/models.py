@@ -129,8 +129,6 @@ class Keyword(db.Model):
     __tablename__ = 'keywords'
     keyword_id = db.Column(db.Integer, primary_key=True)
     keyword_text = db.Column(db.String(255), nullable=False)
-    average_relevance_score = db.Column(db.Float, default=0.3)
-
 class KeywordItems(db.Model):
     __tablename__ = 'keyword_items'
     keyword_id = db.Column(db.Integer, db.ForeignKey('keywords.keyword_id'), primary_key=True, nullable=False)
