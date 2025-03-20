@@ -33,7 +33,7 @@
         <div class="query-list-container">
             <div class="query-list-header">
                 <div class="query-term-header">Search Term</div>
-                <div class="query-details-header">Price Range</div>
+                <div class="query-details-header">Filters</div>
                 <div class="query-status-header">Status</div>
                 <div class="query-actions-header">Actions</div>
             </div>
@@ -47,17 +47,31 @@
                     {% endif %}
                 </div>
                 
+                
                 <div class="query-details">
                     {% if query.min_price or query.max_price %}
-                        {% if query.min_price and query.max_price %}
-                            <span class="price-range">£{{ query.min_price }} - £{{ query.max_price }}</span>
-                        {% elif query.min_price %}
-                            <span class="price-range">Min: £{{ query.min_price }}</span>
-                        {% elif query.max_price %}
-                            <span class="price-range">Max: £{{ query.max_price }}</span>
-                        {% endif %}
-                    {% else %}
-                        <span class="price-range">Any price</span>
+                        <div class="filter-item">
+                            <i class="fas fa-tag"></i>
+                            {% if query.min_price and query.max_price %}
+                                £{{ query.min_price }} - £{{ query.max_price }}
+                            {% elif query.min_price %}
+                                Min £{{ query.min_price }}
+                            {% else %}
+                                Max £{{ query.max_price }}
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                    
+                    <div class="filter-item">
+                        <i class="fas fa-store"></i>
+                        {{ query.marketplace|default('All Marketplaces', true) }}
+                    </div>
+                    
+                    {% if query.item_location %}
+                    <div class="filter-item">
+                        <i class="fas fa-map-marker-alt"></i>
+                        {{ query.item_location|upper }}
+                    </div>
                     {% endif %}
                 </div>
                 

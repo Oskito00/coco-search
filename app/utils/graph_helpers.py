@@ -1,46 +1,31 @@
 from app.models import Item, UserQueryItems
 import pandas as pd
-from datetime import timedelta
+from datetime import datetime, timedelta
 
-def get_query_price_data(query_id):
+def get_price_data(items):
     """
     Returns 3-day rolling average price history
     Format: [{'price': float, 'date': iso_date_str}]
     """
-    # Get raw data
-    raw_data = Item.query\
-        .with_entities(
-            Item.price, 
-            Item.start_time,
-            Item.location_country,  # Add this
-            Item.postal_code,
-            Item.currency
-        )\
-        .join(UserQueryItems, Item.item_id == UserQueryItems.item_id)\
-        .filter(
-            UserQueryItems.query_id == query_id,
-            Item.start_time.isnot(None),
-            Item.price.isnot(None),
-            Item.location_country.isnot(None),
-            Item.postal_code.isnot(None),
-            Item.currency.isnot(None)
-        )\
-        .all()
-
-    if not raw_data:
-        return []
+    # Filter items with valid dates
+    valid_items = [
+        item for item in items 
+        if item.item and 
+        item.item.start_time and  # Ensures not None
+        pd.notna(pd.to_datetime(item.item.start_time, errors='coerce')) and
+        item.item.price and 
+        item.item.currency
+    ]
 
     # Create separate DataFrames
     price_df = pd.DataFrame({
-        'date': [item.start_time for item in raw_data],
-        'price': [float(item.price) for item in raw_data],
-        'currency': [item.currency for item in raw_data]
+        'date': [item.item.start_time for item in valid_items],
+        'price': [float(item.item.price) for item in valid_items],
+        'currency': [item.item.currency for item in valid_items]
     }).sort_values('date')
 
     location_df = pd.DataFrame({
-        'date': [item.start_time for item in raw_data],
-        'country': [item.location_country for item in raw_data],
-        'postal_code': [item.postal_code for item in raw_data]
+        'date': [item.item.start_time for item in valid_items],
     })
 
     # Separate numeric and non-numeric data
@@ -64,5 +49,8 @@ def get_query_price_data(query_id):
         on='date',
         how='left'
     )
+
+    average_price_last_30_days = merged_df[merged_df['date'] > (datetime.now() - timedelta(days=30))]['price'].mean() if merged_df['date'].size > 0 else 0
+    most_frequent_currency = merged_df['currency'].mode()[0] if merged_df['currency'].mode().size > 0 else 'GBP'
     
-    return merged_df.to_dict('records')
+    return merged_df.to_dict('records'), average_price_last_30_days, most_frequent_currency

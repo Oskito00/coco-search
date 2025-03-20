@@ -1,11 +1,11 @@
 from flask import Blueprint, jsonify, render_template, redirect, url_for, request, flash, abort
 from flask_login import login_required, current_user
-from sqlalchemy import exists, func
+from sqlalchemy import exists, func, select
 from app.models import ItemRelevanceFeedback, Keyword, KeywordItems, UserQuery, UserQueryItems, db, Item, copy_item
 from app.forms import QueryForm, DeleteForm  # Create this form if needed
 from flask import current_app
 from datetime import datetime, timezone
-from app.utils.graph_helpers import get_query_price_data
+from app.utils.graph_helpers import get_price_data
 from app.utils.price_helpers import remove_price_outliers
 from app.utils.query_helpers import update_user_usage
 from app.utils.text_helpers import item_matches_keywords
@@ -48,6 +48,20 @@ def edit_query(query_id):
 
     if form.validate_on_submit():
         try:
+
+            if form.marketplace.data != user_query.marketplace:
+                # Prevent duplicate queries
+                existing_query = UserQuery.query.filter(
+                    UserQuery.user_id == current_user.id,
+                UserQuery.keyword_id == user_query.keyword_id,
+                UserQuery.item_location == form.item_location.data,
+                UserQuery.marketplace == form.marketplace.data
+            ).first()
+                
+                if existing_query:
+                    flash('You already have a query with this keyword and marketplace', 'danger')
+                    return render_template('queries/edit.html', form=form, query=user_query)
+            
             old_interval = user_query.check_interval
             new_interval = form.check_interval.data
             
@@ -64,27 +78,35 @@ def edit_query(query_id):
                     raise ValueError("This interval would exceed your daily limit")
     
         
-            if form.required_keywords.data != user_query.required_keywords or form.excluded_keywords.data != user_query.excluded_keywords:
-
-                # 1. Remove non-matching items
+            if form.required_keywords.data != user_query.required_keywords or form.excluded_keywords.data != user_query.excluded_keywords or user_query.item_location != form.item_location.data or user_query.marketplace != form.marketplace.data:
+                print("Required keywords or excluded keywords or item location changed or marketplace changed")
+                new_location = form.item_location.data
+                new_marketplace = form.marketplace.data
+                print("New location:", (new_location))
+                print("New marketplace:", (new_marketplace))
+                # 1. Remove non-matching items and items that don't match new location specified in the query
                 query_items = UserQueryItems.query.filter_by(query_id=query_id).all()
+                print("Query items currently in query:", len(query_items))
                 deletions = [
                     qi for qi in query_items
                     if not item_matches_keywords(qi.item, form.required_keywords.data, form.excluded_keywords.data)
+                    or qi.item.location_country != new_location
+                    or qi.item.marketplace != new_marketplace
                 ]
-            
+                print("Deletions:", len(deletions))
                 # 2. Find new items to add (that match both keyword and new filters)
                 # Get the keyword_id from the user's original query
                 keyword_id = user_query.keyword_id
 
-                # Subquery to find items already linked to this query
-                existing_item_ids = db.session.query(UserQueryItems.item_id)\
-                    .filter(UserQueryItems.query_id == query_id)\
-                    .subquery()
+                # Get existing item IDs as subquery
+                existing_items_subquery = select(UserQueryItems.item_id)\
+                    .where(UserQueryItems.query_id == query_id)\
+                    .scalar_subquery()
 
-                # Get potential items that match the keyword but aren't linked yet
+                # Get items in keyword items that match the new filters, avoiding the ones already in the query
                 potential_items = db.session.query(Item)\
                     .join(KeywordItems, Item.item_id == KeywordItems.item_id)\
+                    .join(UserQuery, KeywordItems.keyword_id == UserQuery.keyword_id)\
                     .outerjoin(
                         ItemRelevanceFeedback,
                         (ItemRelevanceFeedback.item_id == Item.item_id) &
@@ -93,8 +115,9 @@ def edit_query(query_id):
                     )\
                     .filter(
                         KeywordItems.keyword_id == keyword_id,
-                        ~Item.item_id.in_(existing_item_ids),
-                        # Exclude items marked as irrelevant
+                        Item.location_country == new_location,
+                        Item.marketplace == new_marketplace,
+                        ~Item.item_id.in_(existing_items_subquery),
                         db.or_(
                             ItemRelevanceFeedback.is_relevant.is_(None),
                             ItemRelevanceFeedback.is_relevant.is_(True)
@@ -209,11 +232,13 @@ def create_query():
                 # Prevent duplicate queries
                 existing_query = UserQuery.query.filter(
                     UserQuery.user_id == current_user.id,
-                    UserQuery.keyword_id == keyword_id
+                    UserQuery.keyword_id == keyword_id,
+                    UserQuery.item_location == form.item_location.data,
+                    UserQuery.marketplace == form.marketplace.data
                 ).first()
                 
                 if existing_query:
-                    flash('You already have a query with this keyword', 'danger')
+                    flash('You already have a query with this keyword and marketplace', 'danger')
                     return render_template('queries/create.html', form=form)
                 
                 # Proceed with query creation
@@ -229,20 +254,36 @@ def create_query():
             
             #Load historical data if exists
             target_country = new_user_query.item_location
+            target_marketplace = new_user_query.marketplace
+            # Filter historical items by country and marketplace
+            print("Target country:", target_country)
+            print("Target marketplace:", target_marketplace)
 
-            # Filter historical items by country
             historical_items = (
             KeywordItems.query
             .join(Item, KeywordItems.item_id == Item.item_id)
             .filter(
                 KeywordItems.keyword_id == keyword_id,
-                    Item.location_country == target_country
+                    Item.location_country == target_country,
+                    Item.marketplace == target_marketplace
                 )
                     .all()
             )
+            print("Historical items:", len(historical_items))
+
+            filtered_historical_items = []
+            for item in historical_items:
+                if item_matches_keywords(
+                    item.item,
+                    form.required_keywords.data,
+                    form.excluded_keywords.data
+                ):
+                    filtered_historical_items.append(item)
+
+            #fitler by required and excluded keywords
             
             count = 0
-            for keyword_item in historical_items:
+            for keyword_item in filtered_historical_items:
                 feedback = ItemRelevanceFeedback.query.filter_by(user_id=current_user.id, item_id=keyword_item.item_id, keyword_id=keyword_id).first()
                 if feedback:
                     if feedback.is_relevant == False:
@@ -309,6 +350,7 @@ def toggle_query(query_id):
 @bp.route('/<string:query_id>')
 @login_required
 def query_details(query_id):
+    print(f"Query ID: {query_id}")
     query = UserQuery.query.filter_by(user_id=current_user.id, query_id=query_id).first_or_404()
     
     # Get ALL items for accurate stats
@@ -316,26 +358,36 @@ def query_details(query_id):
                          .filter_by(query_id=query_id)\
                          .order_by(UserQueryItems.created_at.desc())\
                          .all()
+    
 
     # Remove outliers using IQR method
-    filtered_items, _ = remove_price_outliers(all_items)
-    
+    print("Length of all items:", len(all_items))
+    result = remove_price_outliers(all_items)
+    filtered_items = result[0] if result else []
+    auction_items = result[1] if len(result) > 1 else []
+    outliers = result[2] if len(result) > 2 else []
+    print("Length of filtered items:", len(filtered_items))
+    print("Length of auction items:", len(auction_items))
+    print("Length of outliers:", len(outliers) if outliers else "None")
     # Calculate stats using filtered items
+
     stats = {
-        'total_items': len(filtered_items),
-        'avg_price': np.mean([item.item.price for item in filtered_items]) if filtered_items else 0
+        'total_items': len(filtered_items+auction_items),
     }
     
     # Only show first 100 items
-    visible_items = filtered_items[:100]
-
-    price_data = get_query_price_data(query_id)
+    #TODO: Make sure newest are first 
+    visible_items = filtered_items[:100]+auction_items[:100]
+    price_data, average_price_last_30_days, most_frequent_currency = get_price_data(filtered_items)
 
     return render_template('queries/details.html', 
                          query=query, 
                          items=visible_items,
+                         auction_items=auction_items,
                          stats=stats,
-                         price_data=price_data
+                         price_data=price_data,
+                         average_price_last_30_days=average_price_last_30_days,
+                         most_frequent_currency=most_frequent_currency
                          )
 
 

@@ -63,6 +63,8 @@ class Item(db.Model):
     legacy_id = db.Column(db.String(50))
     title = db.Column(db.String(255))
     price = db.Column(db.Float)
+    current_bid = db.Column(db.Float)
+    current_bid_currency = db.Column(db.String(10))
     currency = db.Column(db.String(10), default='GBP')
     url = db.Column(db.String(512))
     image_url = db.Column(db.String(255))
@@ -129,6 +131,7 @@ class Keyword(db.Model):
     __tablename__ = 'keywords'
     keyword_id = db.Column(db.Integer, primary_key=True)
     keyword_text = db.Column(db.String(255), nullable=False)
+    
 class KeywordItems(db.Model):
     __tablename__ = 'keyword_items'
     keyword_id = db.Column(db.Integer, db.ForeignKey('keywords.keyword_id'), primary_key=True, nullable=False)

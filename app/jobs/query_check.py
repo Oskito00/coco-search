@@ -18,30 +18,28 @@ def full_scrape_job(query_id):
         session = db.session()
         try:
             with session.begin():
-                # Get and check query
+                # Get the user query from the query_id
                 query = UserQuery.query.get(query_id)
-                
                 if not query or not query.is_active:
                     app.logger.debug(f"[Job {query_id}] Aborting - no active query")
                     return
             # Get the kewords based on the query keyword_id
             keywords = Keyword.query.get(query.keyword_id)
-            # Call scrape ebay with the right filters
+            # Call scrape ebay with the right filters (of the query)
+            app.logger.debug(f"[Job {query_id}] Scraping ebay with filters: {query.min_price}, {query.max_price}, {query.item_location}, {query.condition}, {query.buying_options}, {query.required_keywords}, {query.excluded_keywords}, {query.marketplace}")
             items = scrape_ebay(
                 keywords.keyword_text,
-                filters={'min_price': query.min_price, 'max_price': query.max_price, 'item_location': query.item_location,'condition': query.condition},
+                filters={'min_price': query.min_price, 'max_price': query.max_price, 'item_location': query.item_location,'condition': query.condition, 'buying_options': query.buying_options},
                 required_keywords=query.required_keywords,
                 excluded_keywords=query.excluded_keywords,
                 marketplace=query.marketplace
             )
             app.logger.debug(f"[Job {query_id}] Found {len(items)} items")
             if query.first_run == True:
-                process_items(items, query, full_scan=True, notify=False, first_run=True)
+                process_items(items, query, full_scan=True, notify=True, first_run=True)
                 query.first_run = False
             else:
-                #It is not the first time the query has been run
                 process_items(items, query, full_scan=True, notify=True, first_run=False)
-                        
             query.last_full_run = datetime.now(timezone.utc)
             query.next_full_run = datetime.now(timezone.utc) + timedelta(hours=24)
             db.session.commit()
@@ -59,13 +57,15 @@ def recent_scrape_job(query_id):
             session = db.session
             with session.begin():
                 query = UserQuery.query.get(query_id)
+                app.logger.debug(f"[Job {query_id}] Query: {query}")
                 if not query or not query.is_active:
+                    app.logger.debug(f"[Job {query_id}] Aborting - no active query")
                     return
             try:
                 keywords = Keyword.query.get(query.keyword_id)
                 new_items = scrape_new_items(
                     keywords.keyword_text,
-                    filters={'min_price': query.min_price, 'max_price': query.max_price, 'item_location': query.item_location,'condition': query.condition},
+                    filters={'min_price': query.min_price, 'max_price': query.max_price, 'item_location': query.item_location,'condition': query.condition, 'buying_options': query.buying_options},
                     required_keywords=query.required_keywords,
                     excluded_keywords=query.excluded_keywords,
                     marketplace=query.marketplace
@@ -81,22 +81,21 @@ def recent_scrape_job(query_id):
 def process_items(items, query, check_existing=False, full_scan=False, notify=True, first_run=False):
     app = current_app._get_current_object()
     app.logger.debug(f"[Process Items] Starting processing for query {query.query_id}")
-    app.logger.debug(f"[Process Items] Received {len(items)} items from scrape")
 
+    # Lists to store new items, updated items, price drops, and ending auctions
     new_items = []
     updated_items = []
     price_drops = []
     ending_auctions = []
     item_columns = {c.key for c in inspect(Item).mapper.column_attrs}
 
-    # Get the keyword once at the start
+    # Extract the keyword (text) from the query
     keyword = query.keyword
     current_time = datetime.now(timezone.utc)
-
+    # Loop through all the items found
     for idx, item_data in enumerate(items):
-        # Remove query-specific data from item
+        # If an item with the same ebay_id exists, get it
         existing = Item.query.filter_by(ebay_id=item_data['ebay_id']).first()
-
         if existing:
             feedback = ItemRelevanceFeedback.query.filter_by(
                 user_id=query.user_id,
@@ -108,43 +107,40 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
             else:
                 feedback = None
                 app.logger.debug(f"No feedback found")
-
         if first_run:
-            # Find existing item globally (not per-query)
             if existing:
-                app.logger.debug(f"[Process Items] Item {idx+1}/{len(items)}: Existing item found (ID: {existing.item_id})")
-                # Check if item needs to be linked to keyword
+                # Check if the item is already linked to this keyword, if not add the link
                 if not KeywordItems.query.filter_by(keyword_id=keyword.keyword_id, item_id=existing.item_id).first():
                     app.logger.debug(f"[Process Items] Linking existing item {existing.item_id} to keyword {keyword.keyword_text}")
+                    app.logger.debug(f"existing market: {existing.marketplace}")
+                    app.logger.debug(f"existing country: {existing.location_country}")
                     db.session.add(KeywordItems(keyword_id=keyword.keyword_id, item_id=existing.item_id))
                 # Check if the item is already linked to the query
                 if not UserQueryItems.query.filter_by(query_id=query.query_id, item_id=existing.item_id).first():
-                    app.logger.debug(f"[Process Items] Linking existing item {existing.item_id} to query {query.query_id}")
-                    # If not add the link and include in new_items for notification
                     if feedback and feedback.is_relevant is False:
+                        #If the item has already been marked as irrelevant for this keyword by the user, don't link it to the query
                         continue
                     else:
-                        existing.location_country = item_data.get('location', {}).get('country')
-                        existing.postal_code = item_data.get('location', {}).get('postal_code')
+                        app.logger.debug(f"existing market: {existing.marketplace}")
+                        app.logger.debug(f"existing country: {existing.location_country}")
                         db.session.add(UserQueryItems(query_id=query.query_id, item_id=existing.item_id, created_at=current_time))
-                        new_items.append(existing)
+                        # Add the item to the list of new items for the query
             else:
                 # If we have never seen this item before, create a new global item
                 valid_data = {k: v for k, v in item_data.items() if k in item_columns}
                 new_item = Item(**valid_data)
-                app.logger.debug(f"Location data: {item_data.get('location')}")
-                app.logger.debug(f"Country: {item_data.get('location', {}).get('country')}")
-                app.logger.debug(f"Postal Code: {item_data.get('location', {}).get('postal_code')}")
-                
+                # Add the location data to the item
                 new_item.location_country = item_data.get('location', {}).get('country')
                 new_item.postal_code = item_data.get('location', {}).get('postal_code')
                 db.session.add(new_item)
-                new_items.append(new_item)
-                item = new_item
                 app.logger.debug(f"[Process Items] Item {idx+1}/{len(items)}: New item created (eBay ID: {item_data['ebay_id']})")
 
+                app.logger.debug(f"new item market: {new_item.marketplace}")
+                app.logger.debug(f"new item country: {new_item.location_country}")
                 # Flush to get the new item ID
                 db.session.flush()
+
+                app.logger.debug(f"[Process Items] Linking new item {new_item.item_id} to keyword {keyword.keyword_text}")
             
                 # Link to keyword
                 db.session.add(KeywordItems(
@@ -153,6 +149,7 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
                 found_at=current_time
                 ))
 
+                app.logger.debug(f"[Process Items] Linking new item {new_item.item_id} to query {query.query_id}")
                 # Link to user query
                 db.session.add(UserQueryItems(
                 query_id=query.query_id,
@@ -164,44 +161,36 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
                 db.session.commit()
         
         else:
-            # Find existing item globally (not per-query)
+            # If it is not the first time the query has been run (subsequent full scrapes/recent scrapes)
             if existing:
-                app.logger.debug(f"[Process Items] Item {idx+1}/{len(items)}: Existing item found (ID: {existing.item_id})")
-                # Check if item needs to be linked to keyword
+                # Check if the item is already linked to this keyword, if not add the link
                 if not KeywordItems.query.filter_by(keyword_id=keyword.keyword_id, item_id=existing.item_id).first():
-                    app.logger.debug(f"[Process Items] Linking existing item {existing.item_id} to keyword {keyword.keyword_text}")
                     db.session.add(KeywordItems(keyword_id=keyword.keyword_id, item_id=existing.item_id))
                 # Check if the item is already linked to the query
                 if not UserQueryItems.query.filter_by(query_id=query.query_id, item_id=existing.item_id).first():
                     app.logger.debug(f"[Process Items] Linking existing item {existing.item_id} to query {query.query_id}")
                     # If not add the link and include in new_items for notification
                     if feedback and feedback.is_relevant is False:
+                        #If the item has already been marked as irrelevant for this keyword by the user, don't link it to the query
                         continue
                     else:
-                        existing.location_country = item_data.get('location', {}).get('country')
-                        existing.postal_code = item_data.get('location', {}).get('postal_code')
                         db.session.add(UserQueryItems(query_id=query.query_id, item_id=existing.item_id, created_at=current_time))
                         new_items.append(existing)
             else:
                 # If we have never seen this item before, create a new global item
                 valid_data = {k: v for k, v in item_data.items() if k in item_columns}
                 new_item = Item(**valid_data)
-                app.logger.debug(f"Location data: {item_data.get('location')}")
-                app.logger.debug(f"Country: {item_data.get('location', {}).get('country')}")
-                app.logger.debug(f"Postal Code: {item_data.get('location', {}).get('postal_code')}")
-                
+                # Add the location data to the item
                 new_item.location_country = item_data.get('location', {}).get('country')
                 new_item.postal_code = item_data.get('location', {}).get('postal_code')
                 db.session.add(new_item)
                 new_items.append(new_item)
-                item = new_item
                 app.logger.debug(f"[Process Items] Item {idx+1}/{len(items)}: New item created (eBay ID: {item_data['ebay_id']})")
 
                 # Flush to get the new item ID
                 db.session.flush()
             
                 # Link to keyword
-                  
                 db.session.add(KeywordItems(
                     keyword_id=keyword.keyword_id,
                     item_id=new_item.item_id,
@@ -209,7 +198,6 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
                     ))
 
                 # Link to user query
-                
                 db.session.add(UserQueryItems(
                     query_id=query.query_id,
                     item_id=new_item.item_id,
@@ -220,7 +208,7 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
                 db.session.commit()
 
 
-        #Update existing item if needed
+        #Update the existings item fields if they have changed
         if existing:
             update_count = 0
             for key in item_columns - {'item_id', 'created_at'}:
@@ -230,8 +218,6 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
                     existing.last_updated = current_time
             if update_count > 0:
                 updated_items.append(existing)
-                app.logger.debug(f"Updated for item {existing.item_id}")
-                app.logger.debug(f"[Process Items] Updated {update_count} fields for item {existing.item_id}")
 
         # Track price changes using the existing price that the item was found at
         if existing:
@@ -246,6 +232,7 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
 
         # Auction ending detection (now global)
         end_time = item_data.get('end_time')
+        app.logger.debug(f"[Process Items] Auction ending detection: {end_time}")
         if end_time:
             end_time = end_time.replace(tzinfo=timezone.utc)
             if (end_time - current_time) < timedelta(hours=12):
@@ -259,9 +246,6 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
                     ending_auctions.append(item)
                     user_query_item.auction_ending_notification_sent = True
     
-    
-                
-
     try:
         db.session.commit()
         app.logger.debug(f"[Process Items] Commit successful")
@@ -285,8 +269,10 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
                     NotificationManager.send_price_drops(user, price_drops, query.keyword.keyword_text)
 
             if ending_auctions:
+                app.logger.debug(f"[Process Items] Auction ending detection: {ending_auctions}")
                 if ending_auctions and prefs.get('auction_alerts', True):
                     notification_counts['auction_alerts'] = len(ending_auctions)
+                    app.logger.debug(f"[Process Items] Sending auction alerts for {len(ending_auctions)} items")
                     NotificationManager.send_auction_alerts(user, ending_auctions, query.keyword.keyword_text)
 
             app.logger.debug(f"[Process Items] Notifications sent: {notification_counts}")

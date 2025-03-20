@@ -16,11 +16,11 @@
         </div>
         <div class="stat-item">
             <span class="stat-value">
-                {{ "%.2f"|format(stats.avg_price) }} 
-                {% if items and items[0].item.currency %}
-                    {{ items[0].item.currency }}
+                {% if average_price_last_30_days %}
+                    {{ "%.2f"|format(average_price_last_30_days) }}
+                    {{ most_frequent_currency|default('GBP') }}
                 {% else %}
-                    GBP
+                    N/A
                 {% endif %}
             </span>
             <span class="stat-label">Average Price</span>
@@ -53,9 +53,15 @@
                     <div class="item-details">
                         <h3>{{ item.item.title }}</h3>
                         <p class="id">ID: {{ item.item.item_id }}</p>
-                        <p class="url">URL: <a href="{{ item.item.url }}" target="_blank">{{ item.item.url }}</a></p>
+                        <p class="marketplace">Marketplace: {{ item.item.marketplace }}</p>
                         <p class="location">Location: {{ item.item.location_country }} {{ item.item.postal_code }}</p>
-                        <p class="price">{{ item.item.price }}{{ item.item.currency }}</p>
+                        <p class="url">URL: <a href="{{ item.item.url }}" target="_blank">{{ item.item.url }}</a></p>
+                        {% if item.item.current_bid %}
+                            <p class="price">Current Bid: {{ item.item.current_bid }}</p>
+                        {% endif %}
+                        {% if item.item.price != 0.0 %}
+                            <p class="price">{{ item.item.price }}{{ item.item.currency }}</p>
+                        {% endif %}
                         
                         <div class="feedback-buttons">
                             <form action="{{ url_for('queries.submit_feedback', query_id=query.query_id, item_id=item.item_id) }}#item-{{ item.item_id }}" method="POST">

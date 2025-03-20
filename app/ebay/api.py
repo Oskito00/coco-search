@@ -88,10 +88,12 @@ class EbayAPI:
 
         # Gets a token if already present, if not generates a new one
         self._get_token()
+        self.marketplace = self.marketplace.replace('_', '-')
+        print("Marketplace going into raw search:", self.marketplace)
 
         headers = {
             'Authorization': f'Bearer {self.token}',
-            'X-EBAY-C-MARKETPLACE-ID': self.marketplace.replace('_', '-'),
+            'X-EBAY-C-MARKETPLACE-ID': self.marketplace,
             'X-EBAY-C-CURRENCY': self.currency,
             'Content-Language': self.marketplace_config['language'],
             'Accept-Language': self.marketplace_config['language'],
@@ -119,6 +121,7 @@ class EbayAPI:
             params=params
         )
         print(f"Request URL: {response.request.url}")
+        print(response.headers)
         
         if response.status_code == 429:
             sleep_time = int(response.headers.get('Retry-After', 60))
@@ -128,40 +131,48 @@ class EbayAPI:
         return response.json()
     
     @retry(wait=wait_exponential(multiplier=1, min=2, max=10))
-    def custom_search_query(self, keywords, filters=None, sort_order=None, max_pages=None, marketplace=None, search_for_sold=False, required_keywords=None, excluded_keywords=None):
+    def custom_search_query(self, keywords, filters=None, sort_order=None, max_pages=1, marketplace=None, search_for_sold=False, required_keywords=None, excluded_keywords=None):
         """
         The user can decide what they want to search for in this function
         Examples include: All items, only the first 200 items, the sold items (no longer active)
         """
+        print("Marketplace before reading query marketplace:", self.marketplace)
         if marketplace:
             self.marketplace = marketplace
+        print("Marketplace after reading query marketplace (if any):", self.marketplace)
 
         returned_items = []
         pages_searched = 0
         offset = 0
 
         while (max_pages is None) or (pages_searched < max_pages):
-            time.sleep(1)  # Add rate limiting
+            try:
+                time.sleep(1)  # Add rate limiting
             
-            raw_response = self.raw_search(
+                raw_response = self.raw_search(
                 keywords=keywords,
                 filters=filters,
                 limit=200,
                 offset=offset,
                 sort_order=sort_order
             )
-            parsed_items = self.parse_response(raw_response)
+                parsed_items = self.parse_response(raw_response)
             
-            # Filter before appending
-            filtered_batch = filter_items_by_keywords(parsed_items, required_keywords, excluded_keywords)
-            returned_items.extend(filtered_batch)
+                # Filter before appending
+                filtered_batch = filter_items_by_keywords(parsed_items, required_keywords, excluded_keywords)
+                returned_items.extend(filtered_batch)
             
-            offset += len(parsed_items)
-            pages_searched += 1
+                offset += len(parsed_items)
+                print("pages")
+                pages_searched += 1
 
-            # Break if last page
-            if len(parsed_items) < 200:
-                break
+                # Break if last page
+                if len(parsed_items) < 200:
+                    break
+            
+            except Exception as e:
+                logger.error(f"Error in custom_search_query: {e}")
+                raise e
         
         # Remove duplicates while preserving order and handling null IDs
         seen_ids = set()
@@ -226,8 +237,8 @@ class EbayAPI:
             is_auction = 'AUCTION' in raw_buying_options
 
             auction_data = {
-            'bid_count': item_data.get('bidCount', 0),
-            'current_bid': {
+                'bid_count': item_data.get('bidCount', 0),
+                'current_bid': {
                 'value': float(item_data.get('currentBidPrice', {}).get('value', 0)),
                 'currency': item_data.get('currentBidPrice', {}).get('currency', self.currency)
             },
@@ -258,6 +269,16 @@ class EbayAPI:
                 'legacy_id': item_data.get('legacyItemId'),
                 'title': item_data.get('title', 'No Title'),
                 'price': base_price['value'],
+                'current_bid': (
+                auction_data['current_bid']['value'] 
+                    if auction_data and 'current_bid' in auction_data 
+                    else 0
+                ),
+                'current_bid_currency': (
+                    auction_data['current_bid']['currency'] 
+                    if auction_data and 'current_bid' in auction_data 
+                    else base_price.get('currency', 'GBP')
+                 ),
                 'currency': base_price['currency'],
                 'url': item_data.get('itemWebUrl'),
                 'image_url': item_data.get('image', {}).get('imageUrl'),

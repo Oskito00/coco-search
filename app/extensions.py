@@ -11,6 +11,7 @@ from flask_limiter.util import get_remote_address
 db = SQLAlchemy()
 migrate = Migrate()
 login_manager = LoginManager()
+login_manager.login_view = 'auth.login'
 csrf = CSRFProtect()
 encryptor = DataEncryptor()
 mail = Mail()

@@ -115,32 +115,38 @@ class NotificationManager:
     @staticmethod
     def send_auction_alerts(user, items, query_text=None):
         chat_ids = [user.telegram_chat_ids['main']] + user.telegram_chat_ids['additional']
+        query_text = f" for '{query_text}'" if query_text else ""
+        
+        # Group items into batches of 5
+        batch_size = 5
+        item_batches = [items[i:i+batch_size] for i in range(0, len(items), batch_size)]
+        
         for chat_id in chat_ids:
             notifier = TelegramNotifier(
-            current_app.config['TELEGRAM_BOT_TOKEN'],
-            chat_id
+                current_app.config['TELEGRAM_BOT_TOKEN'],
+                chat_id
             )
-            query_text = f" for '{query_text}'" if query_text else ""
-            for item in items:
-                if item.auction_details['current_bid']['value']:
-                    current_bid = item.auction_details['current_bid']['value']
-                else:
-                    current_bid = item.price
-                if item.end_time:
+            
+            for batch in item_batches:
+                message = f"⏳ **Auctions Ending Soon{query_text}**\n\n"
+                
+                for idx, item in enumerate(batch, 1):
+                    # Process item data
+                    current_bid = item.current_bid or item.price
                     item.end_time = item.end_time.replace(tzinfo=timezone.utc)
                     time_left = item.end_time - datetime.now(timezone.utc)
                     hours_left = round(time_left.total_seconds() / 3600, 1)
-
-                    message = (
-                f"⏳ **Auction Ending Soon{query_text}**\n"
-                f"📦 Item: {item.title}\n"
-                f"💰 Current Price: £{current_bid}\n"
-                f"⏰ Ends in: {hours_left} hours\n"
-                f"🔗 [View Item]({item.url})"
-                )
+                    
+                    message += (
+                        f"{idx}. 📦 **{item.title}**\n"
+                        f"   💰 {item.current_bid} {item.current_bid_currency}\n"
+                        f"   ⏰ {hours_left}h left\n"
+                        f"   [View]({item.url})\n\n"
+                    )
+                
+                # Add footer
+                message += f"Showing {len(batch)} of {len(items)} ending auctions"
+                
                 if user.notification_preferences.get('auction_alerts', True):
                     notifier.send_message(message)
-    
-    
-    
 
