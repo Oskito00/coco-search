@@ -9,28 +9,27 @@ load_dotenv(override=True)  # Load .env file
 project_root = os.path.abspath(os.path.dirname(__file__))
 
 class Config:
-    SECRET_KEY = os.getenv('SECRET_KEY', 'another-fallback-key')
-    SQLALCHEMY_DATABASE_URI = f'sqlite:///{os.path.join(project_root, "instance/app.db")}'
+    SECRET_KEY = os.getenv('SECRET_KEY')
+    ENCRYPTION_KEY = os.getenv('ENCRYPTION_KEY')
+
     TIMEZONE = os.getenv('TIMEZONE', 'Europe/London')
+
     TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
+
     EBAY_ENV = os.getenv('EBAY_ENV', 'sandbox')
     EBAY_API_URL = os.getenv('EBAY_API_URL')
     EBAY_CLIENT_ID = os.getenv('EBAY_CLIENT_ID')
     EBAY_CLIENT_SECRET = os.getenv('EBAY_CLIENT_SECRET')
     EBAY_ACCESS_TOKEN = os.getenv('EBAY_ACCESS_TOKEN')
-    ENCRYPTION_KEY = os.getenv('ENCRYPTION_KEY')
+
     WTF_CSRF_ENABLED = True
-    WTF_CSRF_SECRET_KEY = os.getenv('CSRF_SECRET', 'fallback-secret-key')
+    WTF_CSRF_SECRET_KEY = os.getenv('CSRF_SECRET_KEY')
     WTF_CSRF_TIME_LIMIT = 3600  # 1 hour
-    SQLALCHEMY_ECHO = False  # Disable raw SQL logging
-    SQLALCHEMY_ENGINE_OPTIONS = {
-        'echo_pool': False,
-        'hide_parameters': True
-    }
+    
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
     LOG_LEVEL = 'INFO'
     TESTING = False
-
+    
     #Stripe
     STRIPE_PRICE_INDIVIDUAL = os.getenv('STRIPE_PRICE_INDIVIDUAL')
     STRIPE_PRICE_BUSINESS = os.getenv('STRIPE_PRICE_BUSINESS')
@@ -40,25 +39,22 @@ class Config:
     STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')
 
     #Gmail authentication
-    SECURITY_PASSWORD_SALT = 'my_precious_two'
-    MAIL_SERVER = 'smtp.googlemail.com'
-    MAIL_PORT = 465
-    MAIL_USE_TLS = False
-    MAIL_USE_SSL = True
-
-    #Gmail authentication
-    MAIL_USERNAME = os.getenv('MAIL_USERNAME')
-    MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
-
-    #mail accounts 
-    MAIL_DEFAULT_SENDER = ('Oscar Alberigo', 'oscar.alberigo@gmail.com')
-
+    SECURITY_PASSWORD_SALT = os.getenv('SECURITY_PASSWORD_SALT')
 
     @classmethod
     def verify(cls):
-        """Validate required settings"""
-        if not cls.EBAY_CLIENT_ID or not cls.EBAY_CLIENT_SECRET:
-            raise ValueError("Missing eBay API credentials")
+        required = {
+            'EBAY_CLIENT_ID': cls.EBAY_CLIENT_ID,
+            'EBAY_CLIENT_SECRET': cls.EBAY_CLIENT_SECRET,
+            'ENCRYPTION_KEY': cls.ENCRYPTION_KEY
+        }
+        
+        missing = [k for k, v in required.items() if not v]
+        if missing:
+            raise RuntimeError(f"Missing required config values: {missing}")
+
+        if cls.DEBUG and cls.FLASK_ENV == 'production':
+            raise ValueError("DEBUG mode should never be enabled in production")
 
     @classmethod
     def get(cls, key, default=None):
@@ -73,20 +69,53 @@ class TestingConfig(Config):
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     TELEGRAM_BOT_TOKEN = '7914809074'
 
-class SchedulerConfig(Config):
-    # Inherit DB settings
+class DevelopmentConfig(Config):
+    FLASK_ENV = 'development'
     SQLALCHEMY_DATABASE_URI = f'sqlite:///{os.path.join(project_root, "instance/app.db")}'
 
-    # Disable unnecessary features
-    WTF_CSRF_ENABLED = False
-    LOGIN_DISABLED = True
+    # Scheduler
+    SCHEDULER_JOBSTORES = {
+        'default': {
+            'type': 'sqlalchemy',
+            'url': SQLALCHEMY_DATABASE_URI  # Use your existing database URI
+        }
+    }
+    SCHEDULER_EXECUTORS = {'default': {'type': 'threadpool', 'max_workers': 20}}
+    SCHEDULER_COALESCE = True
 
-class DevelopmentConfig(Config):
-    DEBUG = False
+    #Mail configs
+    MAIL_DEFAULT_SENDER = ('NOREPLY', 'noreply@ebaymonitor.com')
+    MAIL_SERVER = 'smtp.googlemail.com'
+    MAIL_PORT = 465
+    MAIL_USE_TLS = False
+    MAIL_USE_SSL = True
+    MAIL_USERNAME = os.getenv('MAIL_USERNAME')
+    MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
+
     SQLALCHEMY_ECHO = False
+    DEBUG = False
+
+class ProductionConfig(Config):
+    FLASK_ENV = 'production'
+    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL')
+
+    #Mail configs
+    MAIL_DEFAULT_SENDER = ('MAIL_FROM', 'noreply@ebaymonitor.com')
+
+    DEBUG = False
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'echo_pool': False,
+        'hide_parameters': True
+    }
+
+class SchedulerConfig:
+    JOBSTORE_URI = os.getenv('SCHEDULER_DATABASE_URI')
+    JOBSTORE_TABLE = 'apscheduler_jobs'
+    TIMEZONE = os.getenv('TIMEZONE')
+
 
 config = {
     'development':  DevelopmentConfig,
-    'default': Config,
+    'production': ProductionConfig,
     'testing': TestingConfig
 } 

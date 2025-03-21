@@ -54,6 +54,7 @@
                         <h3>{{ item.item.title }}</h3>
                         <p class="id">ID: {{ item.item.item_id }}</p>
                         <p class="marketplace">Marketplace: {{ item.item.marketplace }}</p>
+                        <p>Last updated: {{ item.item.last_updated }}</p>
                         <p class="location">Location: {{ item.item.location_country }} {{ item.item.postal_code }}</p>
                         <p class="url">URL: <a href="{{ item.item.url }}" target="_blank">{{ item.item.url }}</a></p>
                         {% if item.item.current_bid %}

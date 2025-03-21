@@ -1,45 +1,35 @@
 from dotenv import load_dotenv
 from flask import Flask
-from app.extensions import db, migrate, login_manager, csrf, encryptor, mail, limiter
+from app.extensions import (db, migrate, login_manager, csrf, encryptor, mail, limiter, scheduler)
 from flask_wtf.csrf import CSRFProtect
-import logging
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+from app.jobs.snyc_jobs import sync_jobs
 from .forms import csrf
 import os
-from app.scheduler import init_scheduler
+from config import config as app_config
+
 
 
 csrf = CSRFProtect()
 
-scheduler = None
-
-def create_app(config_class=None):
+def create_app(env_name=None):
     load_dotenv(override=True)
     app = Flask(__name__)
 
-    #Initialises scheduler
-    init_scheduler(app)
-
-    # Determine configuration
-    if config_class:
-        app.config.from_object(config_class)
-    else:
-        env_config = os.getenv('FLASK_ENV', 'development').capitalize() + 'Config'
-        app.config.from_object(f'config.{env_config}')
+    # Determine environment
+    env = os.getenv('FLASK_ENV', 'development').lower()
     
-    # Configure logging only outside tests
-    if not app.config.get('TESTING'):
-        logging.basicConfig(
-            level=logging.DEBUG,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
-        logging.getLogger('apscheduler').setLevel(logging.INFO)
+    try:
+        # 2. Load the appropriate config class
+        cfg = app_config[env]
+        app.config.from_object(cfg)
+        
+        # 3. Verify configuration
+        cfg.verify()  # Call verify() on the config CLASS
+        
+    except KeyError:
+        raise ValueError(f"Invalid FLASK_ENV: {env}. Valid options: {list(app_config.keys())}")
     
-    # Initialize CSRF after app creation
-    csrf.init_app(app)  # Now 'app' exists
-    
-    # Initialize other extensions
+    # Initialize extensions
     db.init_app(app)
     migrate.init_app(app, db)
     login_manager.init_app(app)
@@ -47,14 +37,23 @@ def create_app(config_class=None):
     encryptor.init_app(app)
     mail.init_app(app)
     limiter.init_app(app)
-    # Create jobstore within app context
+
+    # Initialize scheduler AFTER database
+    scheduler.init_app(app)
+    
+    # Start scheduler AFTER all extensions
+    scheduler.start()
+    
+    # Add jobs in context
     with app.app_context():
-        app.scheduler_jobstore = SQLAlchemyJobStore(engine=db.get_engine())
+        scheduler.add_job(
+        id='sync_jobs',              # Unique job ID
+        func=sync_jobs,             # Function to execute
+        trigger='interval',         # Trigger type
+        seconds=10,                 # This is a trigger argument
+        replace_existing=True       # Replace if job exists
+    )
 
-    from app.scheduler.cli import start_scheduler
-    app.cli.add_command(start_scheduler)
-
-        
     # Register blueprints
     from app.routes.auth import bp as auth_bp
     app.register_blueprint(auth_bp)
@@ -80,5 +79,9 @@ def create_app(config_class=None):
 
     from app.routes.contact_feedback import bp as contact_feedback_bp
     app.register_blueprint(contact_feedback_bp, url_prefix='/contact_feedback')
+
+    # Debug output
+    print(f"Active config: {env_name}")
+    print(f"Database URI: {app.config['SQLALCHEMY_DATABASE_URI']}")
         
     return app
