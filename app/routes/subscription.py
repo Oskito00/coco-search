@@ -12,6 +12,7 @@ csrf = CSRFProtect()
 bp = Blueprint('subscription', __name__, url_prefix='/subscription')
 
 
+
 @bp.route('/buy_subscription', methods=['GET', 'POST'])
 def buy_subscription():
     form = SubscriptionActionForm()
@@ -27,24 +28,30 @@ def handle_actions():
     """
     Handles the actions for subscription changes
     """
+    print("Handling actions")
     action = request.form.get('action')
     if action == 'create_checkout_session':
+        print("Creating checkout session")
         return create_checkout_session()
     if action == 'schedule_cancellation':
+        print("Scheduling cancellation")
         save_cancellation_feedback()
         return schedule_cancellation()
     if action == 'upgrade_subscription':
+        print("Upgrading subscription")
         return upgrade_subscription()
     if action == 'resume_subscription':
+        print("Resuming subscription")
         return resume_subscription()
     if action == 'schedule_downgrade':
+        print("Scheduling downgrade")
         return schedule_downgrade()
     if action == 'cancel_scheduled_downgrade':
+        print("Cancelling scheduled downgrade")
         return cancel_scheduled_downgrade()
 
 def create_checkout_session():
     # Get the price id and tier from the form
-    stripe.api_key = current_app.config['STRIPE_SECRET_KEY']
     print("Creating checkout session")
     price_id = request.form.get('price_id')
     print(f"Price ID: {price_id}")
@@ -96,7 +103,6 @@ def create_checkout_session():
 def schedule_cancellation():
     """Schedules a subscription cancellation for the current user"""
     print("Scheduling cancellation")
-    stripe.api_key = current_app.config['STRIPE_SECRET_KEY']
     try:
         # Get active subscription
         subs = stripe.Subscription.list(
@@ -132,7 +138,6 @@ def schedule_cancellation():
 def resume_subscription():
     """Resumes a subscription for the current user"""
     print("Resuming subscription")
-    stripe.api_key = current_app.config['STRIPE_SECRET_KEY']
     try:
         # Get active subscription
         subs = stripe.Subscription.list(
@@ -168,7 +173,6 @@ def resume_subscription():
 
 def upgrade_subscription():
     print("Upgrading subscription")
-    stripe.api_key = current_app.config['STRIPE_SECRET_KEY']
     new_price_id = request.form.get('price_id')
     
     try:
@@ -212,8 +216,8 @@ def upgrade_subscription():
         return redirect(url_for('subscription.buy_subscription'))
 
 def schedule_downgrade():
+    print("Scheduling downgrade function running")
     new_price_id = request.form.get('price_id')
-    stripe.api_key = current_app.config['STRIPE_SECRET_KEY']
 
     try:
         # Get active subscription
@@ -256,11 +260,11 @@ def schedule_downgrade():
     
     except stripe.error.StripeError as e:
         flash(f'Error: {e.user_message}', 'danger')
+        print(f"Error: {e.user_message}")
         return redirect(url_for('subscription.buy_subscription'))
     
 def cancel_scheduled_downgrade():
     print("Cancelling scheduled downgrade")
-    stripe.api_key = current_app.config['STRIPE_SECRET_KEY']
     try:
         # Get active subscription
         subs = stripe.Subscription.list(
@@ -307,7 +311,6 @@ def cancel_scheduled_downgrade():
 @bp.route('/create-portal-session', methods=['POST'])
 @login_required
 def create_portal_session():
-    stripe.api_key = current_app.config['STRIPE_SECRET_KEY']
     # Use your existing portal configuration
     session = stripe.billing_portal.Session.create(
         customer=current_user.stripe_customer_id,
