@@ -12,6 +12,13 @@ csrf = CSRFProtect()
 bp = Blueprint('subscription', __name__, url_prefix='/subscription')
 
 
+@bp.before_request
+def configure_stripe():
+    if current_app.config['FLASK_ENV'] == 'development':
+        stripe.api_key = current_app.config['STRIPE_SECRET_KEY']
+    else:
+        stripe.api_key = current_app.config['STRIPE_SECRET_KEY_PROD']
+
 
 @bp.route('/buy_subscription', methods=['GET', 'POST'])
 def buy_subscription():
@@ -82,6 +89,7 @@ def create_checkout_session():
                     'quantity': 1,
                 },
             ],
+            allow_promotion_codes=True,
             mode='subscription',
             success_url=url_for(
                 'subscription.payment_success', _external=True

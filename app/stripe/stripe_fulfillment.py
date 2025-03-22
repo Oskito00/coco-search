@@ -8,7 +8,6 @@ from app.utils.email import notify_user
 from app.utils.query_helpers import pause_queries_exceeding_limit
 
 #User buys new subscription
-
 def handle_new_subscription(event):
     subscription = event['data']['object']
     print("Subscription customer: ", subscription['customer'])

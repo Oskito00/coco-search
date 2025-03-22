@@ -339,6 +339,12 @@
       overflow: hidden;
       margin: 0 auto;
     }
+
+    .hero-content .animated-text {
+      color: var(--sky-blue-dark);
+      display: inline-block;
+      transition: opacity 0.5s ease;
+    }
     
     .cta-buttons {
       flex-direction: column;
@@ -422,6 +428,12 @@
     
     .hero-content .subtitle {
       font-size: 1rem;
+    }
+
+    .hero-content .animated-text {
+      color: var(--sky-blue-dark);
+      display: inline-block;
+      transition: opacity 0.5s ease;
     }
     
     .cta-button {

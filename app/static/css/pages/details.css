@@ -364,3 +364,27 @@ h1 {
     fill: #374151 !important;
     font-weight: 500 !important;
 }
+
+/* Fix for URL overflow on mobile devices */
+.url {
+    max-width: 100%;
+    margin-bottom: 8px;
+}
+
+.url .item-url {
+    display: inline-block;
+    max-width: 90%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+}
+
+/* For very small screens, allow URL to wrap */
+@media (max-width: 480px) {
+    .url .item-url {
+        white-space: normal;
+        word-break: break-all;
+        line-height: 1.4;
+    }
+}

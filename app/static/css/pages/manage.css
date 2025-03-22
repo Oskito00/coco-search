@@ -158,6 +158,50 @@
     border-radius: 4px;
     display: inline-block;
   }
+
+  .telegram-connect-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin: 30px auto;
+    text-align: center;
+    max-width: 500px;
+    padding: 20px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.telegram-connect-message {
+    margin-bottom: 15px;
+    color: #495057;
+    font-size: 16px;
+}
+
+.telegram-connect-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 20px;
+    background-color: #0088cc; /* Telegram blue */
+    color: white;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 500;
+    transition: background-color 0.3s;
+}
+
+.telegram-connect-button:hover {
+    background-color: #0077b5;
+    text-decoration: none;
+    color: white;
+}
+
+.telegram-connect-button i {
+    margin-right: 8px;
+    font-size: 18px;
+}
   
   /* Status indicator */
   .status-indicator {

@@ -12,16 +12,6 @@
         <p class="page-subtitle">Get real-time notifications directly in Telegram</p>
     </div>
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="alert alert-{{ category }}">
-                    {{ message }}
-                </div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
     <div class="connection-steps">
         <div class="step-card">
             <div class="step-number">1</div>

@@ -56,7 +56,7 @@
                         <p class="marketplace">Marketplace: {{ item.item.marketplace }}</p>
                         <p>Last updated: {{ item.item.last_updated }}</p>
                         <p class="location">Location: {{ item.item.location_country }} {{ item.item.postal_code }}</p>
-                        <p class="url">URL: <a href="{{ item.item.url }}" target="_blank">{{ item.item.url }}</a></p>
+                        <p class="url">URL: <a href="{{ item.item.url }}" target="_blank" class="item-url">{{ item.item.url }}</a></p>
                         {% if item.item.current_bid %}
                             <p class="price">Current Bid: {{ item.item.current_bid }}</p>
                         {% endif %}
