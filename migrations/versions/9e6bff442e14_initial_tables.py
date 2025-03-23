@@ -1,8 +1,8 @@
 """Initial tables
 
-Revision ID: 0ad8d39fc0e8
+Revision ID: 9e6bff442e14
 Revises: 
-Create Date: 2025-03-23 21:26:41.427519
+Create Date: 2025-03-23 21:32:20.405550
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '0ad8d39fc0e8'
+revision = '9e6bff442e14'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -122,7 +122,7 @@ def upgrade():
     sa.PrimaryKeyConstraint('keyword_id', 'item_id')
     )
     op.create_table('user_queries',
-    sa.Column('query_id', sa.String(length=36), nullable=False),
+    sa.Column('query_id', sa.UUID(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('keyword_id', sa.Integer(), nullable=False),
     sa.Column('created_at', sa.DateTime(), nullable=True),
@@ -160,7 +160,7 @@ def upgrade():
     sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.Column('auction_ending_notification_sent', sa.Boolean(), nullable=True),
     sa.ForeignKeyConstraint(['item_id'], ['items.item_id'], ),
-    sa.ForeignKeyConstraint(['query_id'], ['user_queries.query_id'], ),
+    sa.ForeignKeyConstraint(['query_id'], ['user_queries.query_id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('query_id', 'item_id')
     )
     with op.batch_alter_table('apscheduler_jobs', schema=None) as batch_op:
