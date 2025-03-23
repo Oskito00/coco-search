@@ -94,6 +94,8 @@ class DevelopmentConfig(Config):
 
     SQLALCHEMY_ECHO = False
     DEBUG = False
+    # Read IS_BETA from environment variable, default to False
+    IS_BETA = os.getenv('IS_BETA', '').lower() in ('true', 'yes', '1')
 
 class ProductionConfig(Config):
     FLASK_ENV = 'production'
