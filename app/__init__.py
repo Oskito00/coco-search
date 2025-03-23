@@ -5,7 +5,7 @@ from flask_wtf.csrf import CSRFProtect
 from app.jobs.snyc_jobs import sync_jobs
 from .forms import csrf
 import os
-from config import config as app_config
+from config import DevelopmentConfig, ProductionConfig, config as app_config
 
 
 
@@ -15,19 +15,24 @@ def create_app(env_name=None):
     load_dotenv(override=True)
     app = Flask(__name__)
 
-    # Determine environment
-    env = os.getenv('FLASK_ENV', 'production').lower()
+    # Auto-detect environment first
+    if os.environ.get('DYNO'):
+        cfg = ProductionConfig
+        app.logger.info("🚀 Heroku production environment detected")
+    else:
+        cfg = DevelopmentConfig
+        app.logger.info("💻 Local development environment detected")
     
+    # Load configuration
+    app.config.from_object(cfg)
+    
+    # Verify configuration after loading
     try:
-        # 2. Load the appropriate config class
-        cfg = app_config[env]
-        app.config.from_object(cfg)
-        
-        # 3. Verify configuration
-        cfg.verify()  # Call verify() on the config CLASS
-        
-    except KeyError:
-        raise ValueError(f"Invalid FLASK_ENV: {env}. Valid options: {list(app_config.keys())}")
+        cfg.verify()  # Should be called on the CLASS, not instance
+        app.logger.info("✅ Configuration verified successfully")
+    except ValueError as e:
+        app.logger.error("❌ Configuration verification failed: %s", e)
+        raise
     
     # Initialize extensions
     db.init_app(app)
