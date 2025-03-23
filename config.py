@@ -104,7 +104,13 @@ class ProductionConfig(Config):
     )
 
     #Mail configs
-    MAIL_DEFAULT_SENDER = ('MAIL_FROM', 'noreply@ebaymonitor.com')
+    MAIL_SERVER='smtp.sendgrid.net',
+    MAIL_PORT=587,
+    MAIL_USE_TLS=True,
+    MAIL_USERNAME='apikey',  # Special username for SendGrid
+    MAIL_PASSWORD=os.environ.get('SENDGRID_API_KEY'),  # Auto-set by Heroku
+    MAIL_DEFAULT_SENDER = ('MAIL_DEFAULT_SENDER', 'noreply@ebaymonitor.com')
+
 
     DEBUG = False
     SQLALCHEMY_ENGINE_OPTIONS = {
