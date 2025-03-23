@@ -1,1 +1,1 @@
-web: gunicorn "app:create_app()" --worker-class gevent --workers 2
+web: gunicorn --workers=2 app:create_app
