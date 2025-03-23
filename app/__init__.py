@@ -47,8 +47,9 @@ def create_app(env_name=None):
     # Initialize scheduler AFTER database
     with app.app_context():
         init_scheduler_tables(db)
-        scheduler.init_app(app)
-        scheduler.start()
+        if not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+            scheduler.init_app(app)
+            scheduler.start()
     
     # Add jobs in context
     with app.app_context():
