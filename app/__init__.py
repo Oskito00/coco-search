@@ -57,7 +57,7 @@ def create_app(env_name=None):
         id='sync_jobs',              # Unique job ID
         func=sync_jobs,             # Function to execute
         trigger='interval',         # Trigger type
-        seconds=10,                 # This is a trigger argument
+        minutes=1,                 # This is a trigger argument
         replace_existing=True       # Replace if job exists
     )
 

@@ -7,8 +7,6 @@ from app._scheduler.job_manager import add_query_jobs, remove_query_jobs
     id="sync_jobs",
     minutes=1,  # ← Keep this
     max_instances=1,
-    coalesce=True,  # ← Add this
-    misfire_grace_time=30  # ← Add this
 )
 def sync_jobs():
     with scheduler.app.app_context():
