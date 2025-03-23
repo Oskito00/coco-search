@@ -103,14 +103,13 @@ class ProductionConfig(Config):
         'postgres://', 'postgresql://', 1
     )
 
-    #Mail configs
-    MAIL_SERVER='smtp.sendgrid.net',
-    MAIL_PORT=587,
-    MAIL_USE_TLS=True,
-    MAIL_USERNAME='apikey',  # Special username for SendGrid
-    MAIL_PASSWORD=os.environ.get('SENDGRID_API_KEY'),  # Auto-set by Heroku
-    MAIL_DEFAULT_SENDER = ('MAIL_DEFAULT_SENDER', 'noreply@ebaymonitor.com')
-
+    # Mail configs - remove commas at end of lines
+    MAIL_SERVER = 'smtp.sendgrid.net'
+    MAIL_PORT = 587
+    MAIL_USE_TLS = True
+    MAIL_USERNAME = 'apikey'
+    MAIL_PASSWORD = os.environ.get('SENDGRID_API_KEY')
+    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', 'noreply@ebaymonitor.com')
 
     DEBUG = False
     SQLALCHEMY_ENGINE_OPTIONS = {
@@ -118,10 +117,20 @@ class ProductionConfig(Config):
         'hide_parameters': True
     }
 
-    SCHEDULER_RUN = os.environ.get('DYNO') in ('web.1', None)  # None for local
-    SCHEDULER_API_ENABLED = False  # Disable API endpoint
+    SCHEDULER_RUN = os.environ.get('DYNO') in ('web.1', None)
+    SCHEDULER_API_ENABLED = False
 
     IS_BETA = os.getenv('IS_BETA', '').lower() in ('true', 'yes', '1')
+
+    def __init__(self):
+        self.validate_mail_config()
+    
+    def validate_mail_config(self):
+        """Explicit mail configuration validation"""
+        if not isinstance(self.MAIL_SERVER, str):
+            raise TypeError(f"MAIL_SERVER must be string, got {type(self.MAIL_SERVER)}")
+        if not isinstance(self.MAIL_PORT, int):
+            raise TypeError(f"MAIL_PORT must be integer, got {type(self.MAIL_PORT)}")
 
 
 class SchedulerConfig:
