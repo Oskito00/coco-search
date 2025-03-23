@@ -163,10 +163,14 @@ def upgrade():
     sa.ForeignKeyConstraint(['query_id'], ['user_queries.query_id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('query_id', 'item_id')
     )
-    with op.batch_alter_table('apscheduler_jobs', schema=None) as batch_op:
-        batch_op.drop_index('ix_apscheduler_jobs_next_run_time')
+    # with op.batch_alter_table('apscheduler_jobs', schema=None) as batch_op:
+    #     batch_op.drop_index('ix_apscheduler_jobs_next_run_time')
+    connection = op.get_bind()
+    if connection.dialect.has_index(connection, 'apscheduler_jobs', 'ix_apscheduler_jobs_next_run_time'):
+        with op.batch_alter_table('apscheduler_jobs', schema=None) as batch_op:
+            batch_op.drop_index('ix_apscheduler_jobs_next_run_time')
 
-    op.drop_table('apscheduler_jobs')
+    # op.drop_table('apscheduler_jobs')
     # ### end Alembic commands ###
 
 
