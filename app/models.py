@@ -4,7 +4,7 @@ from app.extensions import db
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy.dialects.postgresql import NUMERIC
-from sqlalchemy import JSON, UUID, DateTime, String
+from sqlalchemy import JSON, UUID, DateTime, String, text
 
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
@@ -99,7 +99,12 @@ class UserQuery(db.Model):
     __tablename__ = 'user_queries'
     # Core metadata
 
-    query_id = db.Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    query_id = db.Column(
+        UUID(as_uuid=True),  # Proper PostgreSQL UUID type
+        primary_key=True,
+        default=uuid.uuid4,  # Direct UUID object, no string conversion
+        server_default=text("gen_random_uuid()")  # Optional PG function
+    )
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     keyword_id = db.Column(db.Integer, db.ForeignKey('keywords.keyword_id'), nullable=False)
     keyword = db.relationship('Keyword', backref='user_queries')

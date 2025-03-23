@@ -44,10 +44,9 @@ def create_app(env_name=None):
     limiter.init_app(app)
 
     # Initialize scheduler AFTER database
-    if app.config['SCHEDULER_RUN']:
-        scheduler.init_app(app)
-        # Start scheduler AFTER all extensions
-        scheduler.start()
+    scheduler.init_app(app)
+    # Start scheduler AFTER all extensions
+    scheduler.start()
     
     # Add jobs in context
     with app.app_context():
