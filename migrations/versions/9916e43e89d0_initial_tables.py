@@ -1,8 +1,8 @@
-"""Initial migration after schema change
+"""Initial tables
 
-Revision ID: aae74aa5a0ac
+Revision ID: 9916e43e89d0
 Revises: 
-Create Date: 2025-03-12 20:01:29.357403
+Create Date: 2025-03-23 21:15:18.527567
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'aae74aa5a0ac'
+revision = '9916e43e89d0'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -24,14 +24,16 @@ def upgrade():
     sa.Column('legacy_id', sa.String(length=50), nullable=True),
     sa.Column('title', sa.String(length=255), nullable=True),
     sa.Column('price', sa.Float(), nullable=True),
+    sa.Column('current_bid', sa.Float(), nullable=True),
+    sa.Column('current_bid_currency', sa.String(length=10), nullable=True),
     sa.Column('currency', sa.String(length=10), nullable=True),
     sa.Column('url', sa.String(length=512), nullable=True),
     sa.Column('image_url', sa.String(length=255), nullable=True),
     sa.Column('seller', sa.String(length=100), nullable=True),
     sa.Column('seller_rating', sa.String(length=20), nullable=True),
     sa.Column('condition', sa.String(length=50), nullable=True),
-    sa.Column('location_country', sa.String(length=10), nullable=True),
-    sa.Column('postal_code', sa.String(length=20), nullable=True),
+    sa.Column('location_country', sa.String(length=2), nullable=True),
+    sa.Column('postal_code', sa.String(length=10), nullable=True),
     sa.Column('start_time', sa.DateTime(), nullable=True),
     sa.Column('end_time', sa.DateTime(), nullable=True),
     sa.Column('buying_options', sa.Text(), nullable=True),
@@ -51,6 +53,8 @@ def upgrade():
     op.create_table('users',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('email', sa.String(length=120), nullable=False),
+    sa.Column('email_verified', sa.Boolean(), nullable=True),
+    sa.Column('email_verified_on', sa.DateTime(), nullable=True),
     sa.Column('password_hash', sa.String(length=256), nullable=True),
     sa.Column('telegram_chat_ids', sa.JSON(), nullable=True),
     sa.Column('telegram_connected', sa.Boolean(), nullable=True),
@@ -70,6 +74,8 @@ def upgrade():
     sa.Column('pending_effective_date', sa.DateTime(), nullable=True),
     sa.Column('cancellation_requested', sa.Boolean(), nullable=True),
     sa.Column('last_checkout_session_id', sa.String(length=100), nullable=True),
+    sa.Column('grace_period_end', sa.DateTime(), nullable=True),
+    sa.Column('payment_failure_start', sa.DateTime(), nullable=True),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('email')
     )
@@ -81,6 +87,9 @@ def upgrade():
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('feedback_type', sa.String(length=255), nullable=True),
     sa.Column('user_id', sa.Integer(), nullable=False),
+    sa.Column('email', sa.String(length=120), nullable=True),
+    sa.Column('rating', sa.Integer(), nullable=True),
+    sa.Column('message', sa.Text(), nullable=True),
     sa.Column('cancellation_reasons', sa.String(length=255), nullable=True),
     sa.Column('cancellation_comment', sa.Text(), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=True),
@@ -92,14 +101,17 @@ def upgrade():
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('item_id', sa.Integer(), nullable=False),
     sa.Column('keyword_id', sa.Integer(), nullable=False),
-    sa.Column('is_relevant', sa.Boolean(), nullable=False),
-    sa.Column('confidence', sa.Float(), nullable=True),
-    sa.Column('feedback_source', sa.String(length=50), nullable=True),
+    sa.Column('required_keywords', sa.String(length=255), nullable=True),
+    sa.Column('excluded_keywords', sa.String(length=255), nullable=True),
+    sa.Column('is_relevant', sa.Boolean(), nullable=True),
+    sa.Column('simple_hybrid_levenshtein_confidence', sa.Float(), nullable=True),
+    sa.Column('cosine_similarity', sa.Float(), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.ForeignKeyConstraint(['item_id'], ['items.item_id'], ),
     sa.ForeignKeyConstraint(['keyword_id'], ['keywords.keyword_id'], ),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id')
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('user_id', 'item_id', 'keyword_id', name='uq_user_item_keyword_feedback')
     )
     op.create_table('keyword_items',
     sa.Column('keyword_id', sa.Integer(), nullable=False),
@@ -110,7 +122,7 @@ def upgrade():
     sa.PrimaryKeyConstraint('keyword_id', 'item_id')
     )
     op.create_table('user_queries',
-    sa.Column('query_id', sa.Integer(), nullable=False),
+    sa.Column('query_id', sa.UUID(), server_default=sa.text('(gen_random_uuid())'), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('keyword_id', sa.Integer(), nullable=False),
     sa.Column('created_at', sa.DateTime(), nullable=True),
@@ -128,6 +140,7 @@ def upgrade():
     sa.Column('excluded_keywords', sa.String(length=255), nullable=True),
     sa.Column('buying_options', sa.String(length=255), nullable=True),
     sa.Column('first_run', sa.Boolean(), nullable=True),
+    sa.Column('average_relevance_score', sa.Float(), nullable=True),
     sa.ForeignKeyConstraint(['keyword_id'], ['keywords.keyword_id'], ),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('query_id')
@@ -142,18 +155,32 @@ def upgrade():
         batch_op.create_index(batch_op.f('ix_user_queries_required_keywords'), ['required_keywords'], unique=False)
 
     op.create_table('user_query_items',
-    sa.Column('query_id', sa.Integer(), nullable=False),
+    sa.Column('query_id', sa.String(length=36), nullable=False),
     sa.Column('item_id', sa.Integer(), nullable=False),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.Column('auction_ending_notification_sent', sa.Boolean(), nullable=True),
     sa.ForeignKeyConstraint(['item_id'], ['items.item_id'], ),
     sa.ForeignKeyConstraint(['query_id'], ['user_queries.query_id'], ),
     sa.PrimaryKeyConstraint('query_id', 'item_id')
     )
+    with op.batch_alter_table('apscheduler_jobs', schema=None) as batch_op:
+        batch_op.drop_index('ix_apscheduler_jobs_next_run_time')
+
+    op.drop_table('apscheduler_jobs')
     # ### end Alembic commands ###
 
 
 def downgrade():
     # ### commands auto generated by Alembic - please adjust! ###
+    op.create_table('apscheduler_jobs',
+    sa.Column('id', sa.VARCHAR(length=191), nullable=False),
+    sa.Column('next_run_time', sa.FLOAT(), nullable=True),
+    sa.Column('job_state', sa.BLOB(), nullable=False),
+    sa.PrimaryKeyConstraint('id')
+    )
+    with op.batch_alter_table('apscheduler_jobs', schema=None) as batch_op:
+        batch_op.create_index('ix_apscheduler_jobs_next_run_time', ['next_run_time'], unique=False)
+
     op.drop_table('user_query_items')
     with op.batch_alter_table('user_queries', schema=None) as batch_op:
         batch_op.drop_index(batch_op.f('ix_user_queries_required_keywords'))
