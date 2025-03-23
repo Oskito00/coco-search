@@ -1,10 +1,11 @@
 from datetime import datetime, timezone
+import os
 import uuid
 from app.extensions import db
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy.dialects.postgresql import NUMERIC
-from sqlalchemy import JSON, UUID, DateTime, String, text
+from sqlalchemy.dialects.postgresql import NUMERIC, UUID
+from sqlalchemy import JSON, DateTime, String, text
 
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
@@ -84,7 +85,11 @@ class Item(db.Model):
     
 class UserQueryItems(db.Model):
     __tablename__ = 'user_query_items'
-    query_id = db.Column(String(36), db.ForeignKey('user_queries.query_id'), primary_key=True, nullable=False)
+    query_id = db.Column(
+        UUID(as_uuid=True),  # Must match exactly
+        db.ForeignKey('user_queries.query_id', ondelete='CASCADE'),
+        primary_key=True
+    )
     item_id = db.Column(db.Integer, db.ForeignKey('items.item_id'), primary_key=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     auction_ending_notification_sent = db.Column(db.Boolean, default=False)
@@ -97,13 +102,11 @@ class UserQueryItems(db.Model):
 
 class UserQuery(db.Model):
     __tablename__ = 'user_queries'
-    # Core metadata
-
     query_id = db.Column(
-        UUID(as_uuid=True),  # Proper PostgreSQL UUID type
+        UUID(as_uuid=True),  # Always use UUID type
         primary_key=True,
-        default=uuid.uuid4,  # Direct UUID object, no string conversion
-        server_default=text("gen_random_uuid()")  # Optional PG function
+        default=uuid.uuid4,
+        server_default=text('gen_random_uuid()') if os.environ.get('DYNO') else None
     )
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     keyword_id = db.Column(db.Integer, db.ForeignKey('keywords.keyword_id'), nullable=False)

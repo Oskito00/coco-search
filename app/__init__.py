@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 from flask import Flask
-from app.extensions import (db, migrate, login_manager, csrf, encryptor, mail, limiter, scheduler)
+from app.extensions import (db, init_scheduler_tables, migrate, login_manager, csrf, encryptor, mail, limiter, scheduler)
 from flask_wtf.csrf import CSRFProtect
 from app.jobs.snyc_jobs import sync_jobs
 from .forms import csrf
@@ -43,10 +43,12 @@ def create_app(env_name=None):
     mail.init_app(app)
     limiter.init_app(app)
 
+
     # Initialize scheduler AFTER database
-    scheduler.init_app(app)
-    # Start scheduler AFTER all extensions
-    scheduler.start()
+    with app.app_context():
+        init_scheduler_tables(db)
+        scheduler.init_app(app)
+        scheduler.start()
     
     # Add jobs in context
     with app.app_context():
