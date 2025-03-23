@@ -1,8 +1,8 @@
 """Initial tables
 
-Revision ID: 9916e43e89d0
+Revision ID: 0ad8d39fc0e8
 Revises: 
-Create Date: 2025-03-23 21:15:18.527567
+Create Date: 2025-03-23 21:26:41.427519
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '9916e43e89d0'
+revision = '0ad8d39fc0e8'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -122,7 +122,7 @@ def upgrade():
     sa.PrimaryKeyConstraint('keyword_id', 'item_id')
     )
     op.create_table('user_queries',
-    sa.Column('query_id', sa.UUID(), server_default=sa.text('(gen_random_uuid())'), nullable=False),
+    sa.Column('query_id', sa.String(length=36), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('keyword_id', sa.Integer(), nullable=False),
     sa.Column('created_at', sa.DateTime(), nullable=True),
@@ -155,7 +155,7 @@ def upgrade():
         batch_op.create_index(batch_op.f('ix_user_queries_required_keywords'), ['required_keywords'], unique=False)
 
     op.create_table('user_query_items',
-    sa.Column('query_id', sa.String(length=36), nullable=False),
+    sa.Column('query_id', sa.UUID(), nullable=False),
     sa.Column('item_id', sa.Integer(), nullable=False),
     sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.Column('auction_ending_notification_sent', sa.Boolean(), nullable=True),
