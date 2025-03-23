@@ -16,7 +16,7 @@ def create_app(env_name=None):
     app = Flask(__name__)
 
     # Determine environment
-    env = os.getenv('FLASK_ENV', 'development').lower()
+    env = os.getenv('FLASK_ENV', 'production').lower()
     
     try:
         # 2. Load the appropriate config class
@@ -39,10 +39,10 @@ def create_app(env_name=None):
     limiter.init_app(app)
 
     # Initialize scheduler AFTER database
-    scheduler.init_app(app)
-    
-    # Start scheduler AFTER all extensions
-    scheduler.start()
+    if app.config['SCHEDULER_RUN']:
+        scheduler.init_app(app)
+        # Start scheduler AFTER all extensions
+        scheduler.start()
     
     # Add jobs in context
     with app.app_context():

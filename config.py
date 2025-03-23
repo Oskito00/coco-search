@@ -110,6 +110,12 @@ class ProductionConfig(Config):
         'hide_parameters': True
     }
 
+    SCHEDULER_RUN = os.environ.get('DYNO') in ('web.1', None)  # None for local
+    SCHEDULER_API_ENABLED = False  # Disable API endpoint
+
+    IS_BETA = os.getenv('IS_BETA', '').lower() in ('true', 'yes', '1')
+
+
 class SchedulerConfig:
     JOBSTORE_URI = os.getenv('SCHEDULER_DATABASE_URI')
     JOBSTORE_TABLE = 'apscheduler_jobs'
