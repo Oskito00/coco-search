@@ -90,8 +90,6 @@ requests==2.32.3
 requests-mock==1.12.1
 rich==13.9.4
 safetensors==0.5.3
-scikit-learn==1.6.1
-scipy==1.13.1
 sentence-transformers==3.4.1
 simple-websocket==1.1.0
 six==1.17.0
