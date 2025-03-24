@@ -1,15 +1,32 @@
 from dotenv import load_dotenv
-from flask import Flask
+from flask import Flask, redirect, request
 from app.extensions import (db, init_scheduler_tables, migrate, login_manager, csrf, encryptor, mail, limiter, scheduler)
 from flask_wtf.csrf import CSRFProtect
 from app.jobs.snyc_jobs import sync_jobs
 from .forms import csrf
 import os
 from config import DevelopmentConfig, ProductionConfig, config as app_config
+from flask_talisman import Talisman
 
 
 
 csrf = CSRFProtect()
+
+talisman = Talisman(
+    content_security_policy={
+        'default-src': "'self'",
+        'script-src': [
+            "'self'",
+            'https://cdn.jsdelivr.net',
+            "'unsafe-inline'"  # Only if absolutely necessary
+        ],
+        'style-src': [
+            "'self'",
+            'https://fonts.googleapis.com',
+            "'unsafe-inline'"
+        ]
+    }
+)
 
 def create_app(env_name=None):
     load_dotenv(override=True)
@@ -19,6 +36,12 @@ def create_app(env_name=None):
     if os.environ.get('DYNO'):
         cfg = ProductionConfig
         app.logger.info("🚀 Heroku production environment detected")
+        @app.before_request
+        def enforce_https():
+            if not request.is_secure:
+                url = request.url.replace('http://', 'https://', 1)
+                code = 301
+                return redirect(url, code=code)
     else:
         cfg = DevelopmentConfig
         app.logger.info("💻 Local development environment detected")
@@ -88,4 +111,6 @@ def create_app(env_name=None):
     print(f"Active config: {env_name}")
     print(f"Database URI: {app.config['SQLALCHEMY_DATABASE_URI']}")
         
+    talisman.init_app(app)
+    
     return app

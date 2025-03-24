@@ -122,6 +122,19 @@ class ProductionConfig(Config):
 
     IS_BETA = os.getenv('IS_BETA', '').lower() in ('true', 'yes', '1')
 
+    # Force HTTPS
+    SESSION_COOKIE_SECURE = True
+    REMEMBER_COOKIE_SECURE = True
+    PREFERRED_URL_SCHEME = 'https'
+    
+    # HTTP Strict Transport Security
+    SECURITY_HSTS_ENABLED = True
+    SECURITY_HSTS_SECONDS = 31536000  # 1 year
+    SECURITY_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURITY_HSTS_PRELOAD = True
+
+    
+
     def __init__(self):
         self.validate_mail_config()
     
