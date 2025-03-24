@@ -108,7 +108,10 @@ class ProductionConfig(Config):
         'connect_args': {
             'sslmode': 'require',
             'sslrootcert': os.path.join(os.path.dirname(__file__), 'prod-ca-certificate.crt')
-        }
+        },
+        'pool_size': 5,
+        'max_overflow': 10,
+        'pool_recycle': 300,
     }
 
     # Mail configs - remove commas at end of lines
