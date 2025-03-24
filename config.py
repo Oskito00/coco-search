@@ -104,12 +104,12 @@ class ProductionConfig(Config):
     )
 
     # Mail configs - remove commas at end of lines
-    MAIL_SERVER = 'smtp.sendgrid.net'
+    MAIL_SERVER = 'smtp.mailgun.org'
     MAIL_PORT = 587
     MAIL_USE_TLS = True
-    MAIL_USERNAME = 'apikey'
-    MAIL_PASSWORD = os.environ.get('SENDGRID_API_KEY')
-    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', 'noreply@ebaymonitor.com')
+    MAIL_USERNAME = 'postmaster@sandbox97899069c87a42bc8be143e9f92ee3a7.mailgun.org'
+    MAIL_PASSWORD = 'd4e78637428d4b2317873133804d0f9c-3d4b3a2a-1002e7c3'
+    MAIL_DEFAULT_SENDER = 'postmaster@sandbox97899069c87a42bc8be143e9f92ee3a7.mailgun.org'
 
     DEBUG = False
     SQLALCHEMY_ENGINE_OPTIONS = {
