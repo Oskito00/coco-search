@@ -20,13 +20,13 @@ def login():
     form = LoginForm()
     print("Form data:", form.data)
     if form.validate_on_submit():
-        user = User.query.filter_by(email=form.email.data).first()
+        user = User.query.filter_by(email=form.email.data.lower()).first()
         print("User found:", user)
         if not user:
             flash('User not found', 'danger')
             return redirect(url_for('auth.login'))
         if not user.email_verified:
-            resend_url = url_for('auth.resend_verification', email=user.email)
+            resend_url = url_for('auth.resend_verification', email=user.email.lower())
             flash(Markup(f'Please verify your email first. <a href="{resend_url}">Resend verification email</a>'), 'danger')
             return redirect(url_for('auth.login'))
         if not user.check_password(form.password.data):
@@ -43,13 +43,13 @@ def register():
     form = RegistrationForm()
     if form.validate_on_submit():
         # Check if email exists
-        existing_user = User.query.filter_by(email=form.email.data).first()
+        existing_user = User.query.filter_by(email=form.email.data.lower()).first()
         if existing_user:
             print("User already exists")
             flash('This email is already registered. Please use a different email.', 'danger')
             return render_template('auth/register.html', form=form)
         try:
-            user = User(email=form.email.data)
+            user = User(email=form.email.data.lower())
             user.set_password(form.password.data)
             db.session.add(user)
             db.session.commit()
@@ -116,8 +116,8 @@ def forgot_password():
     print("Forgot password button pressed")
     form = ForgotPasswordForm()
     if form.validate_on_submit():
-        print("User email:", form.email.data)
-        user = User.query.filter_by(email=form.email.data).first()
+        print("User email:", form.email.data.lower())
+        user = User.query.filter_by(email=form.email.data.lower()).first()
         if user:
             token = generate_confirmation_token(user.email)
             reset_url = url_for('auth.reset_password', token=token, _external=True)

@@ -43,26 +43,38 @@
             
             <div class="form-group">
                 {{ form.required_keywords.label }}
+                <small class="form-text text-muted mb-2">
+                    Keywords that <em>must</em> appear in the listing. Add each word by pressing Enter.
+                </small>
                 <div class="tag-input-container">
-                    <div class="tags-list" id="required-tags">
-                        <!-- Existing tags will be added here by JavaScript -->
-                    </div>
+                    <div class="tags-list" id="required-tags"></div>
                     <input type="text" 
                            class="tag-input" 
                            id="required-keywords-input"
-                           placeholder="Type and press enter...">
+                           placeholder="Type a word and press Enter"
+                           aria-describedby="required-help">
+                    <div class="invalid-feedback" id="required-feedback">
+                        Please enter single words without spaces or commas
+                    </div>
                 </div>
                 {{ form.required_keywords(class="form-control d-none") }}
             </div>
             
             <div class="form-group">
                 {{ form.excluded_keywords.label }}
+                <small class="form-text text-muted mb-2">
+                    Keywords that <em>must not</em> appear in the listing. Add each word by pressing Enter.
+                </small>
                 <div class="tag-input-container">
                     <div class="tags-list" id="excluded-tags"></div>
                     <input type="text" 
                            class="tag-input" 
                            id="excluded-keywords-input"
-                           placeholder="Type and press enter...">
+                           placeholder="Type a word and press Enter"
+                           aria-describedby="excluded-help">
+                    <div class="invalid-feedback" id="excluded-feedback">
+                        Please enter single words without spaces or commas
+                    </div>
                 </div>
                 {{ form.excluded_keywords(class="form-control d-none") }}
             </div>

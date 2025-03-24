@@ -391,3 +391,23 @@
     min-width: 120px;
     padding: 0.25rem;
   }
+  
+  .invalid-feedback {
+    display: none;
+    color: #dc3545;
+    font-size: 0.875em;
+    margin-top: 0.25rem;
+  }
+  
+  .is-invalid + .invalid-feedback {
+    display: block;
+  }
+  
+  .is-invalid {
+    border-color: #dc3545 !important;
+  }
+  
+  .form-text {
+    font-size: 0.9rem;
+    color: #6c757d !important;
+  }
