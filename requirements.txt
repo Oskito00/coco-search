@@ -115,3 +115,4 @@ WTForms==3.2.1
 zipp==3.21.0
 gunicorn==22.0.0
 gevent==23.9.1
+flask-talisman==1.0.0
