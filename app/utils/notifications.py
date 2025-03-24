@@ -18,6 +18,7 @@ class TelegramNotifier:
     def send_message(self, message):
         """Send formatted message through Telegram"""
         try:
+            print("Sending message to Telegram bot: ", self.bot_token)
             response = requests.post(
                 f"https://api.telegram.org/bot{self.bot_token}/sendMessage",
                 json={
@@ -27,6 +28,7 @@ class TelegramNotifier:
                     'disable_web_page_preview': True
                 }
             )
+            print("Response: ", response)
             return response.status_code == 200
         except Exception as e:
             current_app.logger.error(f"Telegram send failed: {str(e)}")
