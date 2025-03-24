@@ -36,10 +36,16 @@ class NotificationManager:
     @staticmethod
     def send_item_notification(user, items, query_text=None):
         # Check preferences and connection
+        print("Send item notification running")
         if (not user.telegram_connected or 
             not user.notification_preferences.get('new_items', True) or
             not items):
             return False
+        
+        print("Main telegram ID: ", user.telegram_chat_ids['main'])
+        
+        
+        
         
         try:
             chat_ids = [user.telegram_chat_ids['main']] + user.telegram_chat_ids['additional']
@@ -48,6 +54,7 @@ class NotificationManager:
                     current_app.config['TELEGRAM_BOT_TOKEN'],
                     chat_id
                 )
+                print("Chat ID: ", chat_ids)
             
                 # Improved message formatting
                 query_text = f" for your '{query_text}' search" if query_text else ""
@@ -67,6 +74,7 @@ class NotificationManager:
                 
             
                 # Add view more link
+                print("About to send message: ")
                 notifier.send_message(message)
             return True
         except Exception as e:

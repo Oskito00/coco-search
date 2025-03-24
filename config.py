@@ -63,7 +63,7 @@ class TestingConfig(Config):
 
 class DevelopmentConfig(Config):
     FLASK_ENV = 'development'
-    SQLALCHEMY_DATABASE_URI = f'sqlite:///{os.path.join(project_root, "instance/app.db")}'
+    SQLALCHEMY_DATABASE_URI = "postgresql:///ebay_checker" 
 
     # Scheduler
     SCHEDULER_JOBSTORES = {

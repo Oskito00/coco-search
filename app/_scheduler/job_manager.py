@@ -1,10 +1,14 @@
 from datetime import datetime
+
+from sqlalchemy import UUID
 from app.jobs.query_check import full_scrape_job, recent_scrape_job
 from app.extensions import scheduler
 from app.models import UserQuery
 
 def add_query_jobs(query_id):
     print(f"ADD_QUERY_JOBS: Query ID: {query_id}")
+    query = UserQuery.query.get(query_id)
+
     query = UserQuery.query.get(query_id)
     print(f"ADD_QUERY_JOBS: Query: {query}")
     # Full job - runs immediately and every 24h
