@@ -25,12 +25,18 @@ talisman = Talisman(
             'https://fonts.googleapis.com',
             "'unsafe-inline'"
         ]
-    }
+    },
+    force_https=False,  # Disable for all environments
+    session_cookie_secure=False,
+    hsts=False  # Completely disable HSTS
 )
 
 def create_app(env_name=None):
     load_dotenv(override=True)
     app = Flask(__name__)
+
+    is_development = app.config.get('ENV') == 'development'  # or app.config.get('ENV') == 'development'
+    is_production = app.config.get('ENV') == 'production'
 
     # Auto-detect environment first
     if os.environ.get('DYNO'):
@@ -110,7 +116,17 @@ def create_app(env_name=None):
     # Debug output
     print(f"Active config: {env_name}")
     print(f"Database URI: {app.config['SQLALCHEMY_DATABASE_URI']}")
-        
-    talisman.init_app(app)
+
+    # Only enable security headers in production
+    if is_production == True:
+        talisman.init_app(app)
+    else:
+        print("Debug mode is enabled. Security headers are disabled.")
+        talisman.init_app(
+            app,
+            force_https=False,
+            session_cookie_secure=False,
+            content_security_policy=None
+        )
     
     return app

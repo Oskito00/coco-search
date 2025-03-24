@@ -94,6 +94,7 @@ class DevelopmentConfig(Config):
 
     SQLALCHEMY_ECHO = False
     DEBUG = False
+    FORCE_HTTPS = False
     # Read IS_BETA from environment variable, default to False
     IS_BETA = os.getenv('IS_BETA', '').lower() in ('true', 'yes', '1')
 
@@ -101,7 +102,14 @@ class ProductionConfig(Config):
     FLASK_ENV = 'production'
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', '').replace(
         'postgres://', 'postgresql://', 1
-    )
+    ) + '?sslmode=require'
+
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'connect_args': {
+            'sslmode': 'require',
+            'sslrootcert': os.path.join(os.path.dirname(__file__), 'prod-ca-certificate.crt')
+        }
+    }
 
     # Mail configs - remove commas at end of lines
     MAIL_SERVER = 'smtp.mailgun.org'

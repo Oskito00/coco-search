@@ -9,9 +9,16 @@
 {% block content %}
 <div class="background">
     {% if config.IS_BETA %}
-        <div class="alert alert-warning">
-            <strong>Beta Version</strong> - This is a beta version of the website. Subscriptions are not available in this version.
+    <div class="alert-beta">
+        <div class="alert-beta-content">
+            <strong>
+                <span class="fas fa-exclamation-triangle"></span>
+                Beta Version
+            </strong>
+            <span>This is a beta version of the website. Subscriptions are not available in this version.</span>
+            <button class="close" onclick="this.parentElement.parentElement.remove()">&times;</button>
         </div>
+    </div>
 {% else %}
 <div class="subscription-container">
     <h1 class="text-center mb-5 text-primary">Choose Your Plan</h1>
