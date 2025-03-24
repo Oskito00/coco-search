@@ -5,7 +5,9 @@ from app.extensions import db
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy.dialects.postgresql import NUMERIC, UUID
-from sqlalchemy import JSON, DateTime, String, text
+from sqlalchemy import JSON, text
+from sqlalchemy.dialects.postgresql import JSONB
+
 
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
@@ -17,17 +19,14 @@ class User(UserMixin, db.Model):
     email_verified_on = db.Column(db.DateTime)
 
     password_hash = db.Column(db.String(256))
-    telegram_chat_ids = db.Column(db.JSON, default={
-        'main': None,
-        'additional': []
-    })
+    telegram_chat_ids = db.Column(JSONB().with_variant(
+        db.JSON(), 'sqlite'
+    ), default={'main': None, 'additional': []})
     telegram_connected = db.Column(db.Boolean, default=False)
     telegram_notifications_enabled = db.Column(db.Boolean, default=True)
-    notification_preferences = db.Column(db.JSON, default={
-        'price_drops': True,
-        'new_items': True,
-        'auction_alerts': True,
-    })
+    notification_preferences = db.Column(JSONB().with_variant(
+        db.JSON(), 'sqlite'
+    ), default={'price_drops': True, 'new_items': True, 'auction_alerts': True})
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime)
     is_active = db.Column(db.Boolean, default=True)
@@ -37,11 +36,17 @@ class User(UserMixin, db.Model):
     # Stripe/Subscription
     stripe_customer_id = db.Column(db.String(50), index=True)
     stripe_subscription_id = db.Column(db.String(50), index=True)
-    tier = db.Column(JSON, default={'name': 'free', 'query_limit': 0})
+    tier = db.Column(JSONB().with_variant(
+        db.JSON(), 'sqlite'
+    ), default={'name': 'free', 'query_limit': 0})
     subscription_status = db.Column(db.String(20), default='inactive')  # active/past_due/canceled/expired
     current_period_end = db.Column(db.DateTime)
-    requested_change = db.Column(JSON)  # {'new_tier': 'pro', 'when': 'now|renewal'}
-    pending_tier = db.Column(JSON)  # {'name': 'pro', 'query_limit': 100}
+    requested_change = db.Column(JSONB().with_variant(
+        db.JSON(), 'sqlite'
+    ), default={'new_tier': 'pro', 'when': 'now|renewal'})
+    pending_tier = db.Column(JSONB().with_variant(
+        db.JSON(), 'sqlite'
+    ), default={'name': 'pro', 'query_limit': 100})
     pending_effective_date = db.Column(db.DateTime)
     cancellation_requested = db.Column(db.Boolean, default=False)
     last_checkout_session_id = db.Column(db.String(100))
