@@ -76,7 +76,7 @@ class DevelopmentConfig(Config):
     SCHEDULER_COALESCE = True
 
     #Mail configs
-    MAIL_DEFAULT_SENDER = ('NOREPLY', 'noreply@ebaymonitor.com')
+    MAIL_DEFAULT_SENDER = ('EbayRPD', 'noreply@ebayrpd.com')
     MAIL_SERVER = 'smtp.googlemail.com'
     MAIL_PORT = 465
     MAIL_USE_TLS = False
@@ -95,8 +95,9 @@ class DevelopmentConfig(Config):
     SQLALCHEMY_ECHO = False
     DEBUG = False
     FORCE_HTTPS = False
-    # Read IS_BETA from environment variable, default to False
-    IS_BETA = os.getenv('IS_BETA', '').lower() in ('true', 'yes', '1')
+
+    # Read IS_BETA from the environment variable
+    IS_BETA = False
 
 class ProductionConfig(Config):
     FLASK_ENV = 'production'
@@ -131,7 +132,7 @@ class ProductionConfig(Config):
     SCHEDULER_RUN = os.environ.get('DYNO') in ('web.1', None)
     SCHEDULER_API_ENABLED = False
 
-    IS_BETA = os.getenv('IS_BETA', '').lower() in ('true', 'yes', '1')
+    IS_BETA = True
 
     # Force HTTPS
     SESSION_COOKIE_SECURE = True

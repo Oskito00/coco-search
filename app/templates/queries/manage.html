@@ -11,12 +11,14 @@
         <div class="manage-header">
             <h1>Searches</h1>
             <p>Hi, {{ current_user.email }}</p>
-            <p class="subtitle">Get price alerts for the items that matter to you</p>
+            <p class="subtitle">Get notifications for the items that matter to you</p>
             
             <div class="manage-actions">
+                {% if current_user.query_usage != 0 %}
                 <a href="{{ url_for('queries.create_query') }}" class="add-button">
                     <i class="fa-solid fa-plus"></i> Add New Search
                 </a>
+                {% endif %}
             </div>
         </div>
 

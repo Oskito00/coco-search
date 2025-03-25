@@ -64,7 +64,10 @@ class User(UserMixin, db.Model):
     
 class Item(db.Model):
     __tablename__ = 'items'
-    item_id = db.Column(db.Integer, primary_key=True)
+    item_id = db.Column(
+        db.BigInteger,  # Use BigInteger for PostgreSQL serial types
+        primary_key=True,
+    )
     ebay_id = db.Column(db.String(50), unique=True, nullable=False)
     legacy_id = db.Column(db.String(50))
     title = db.Column(db.String(255))

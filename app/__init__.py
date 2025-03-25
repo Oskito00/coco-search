@@ -35,8 +35,8 @@ def create_app(env_name=None):
     load_dotenv(override=True)
     app = Flask(__name__)
 
-    is_development = app.config.get('ENV') == 'development'  # or app.config.get('ENV') == 'development'
-    is_production = app.config.get('ENV') == 'production'
+    is_development = app.config.get('FLASK_ENV') == 'development'  # or app.config.get('ENV') == 'development'
+    is_production = app.config.get('FLASK_ENV') == 'production'
 
     # Auto-detect environment first
     if os.environ.get('DYNO'):
@@ -114,7 +114,7 @@ def create_app(env_name=None):
     app.register_blueprint(contact_feedback_bp, url_prefix='/contact_feedback')
 
     # Debug output
-    print(f"Active config: {env_name}")
+    print(f"Active config: {app.config['FLASK_ENV']}")
     print(f"Database URI: {app.config['SQLALCHEMY_DATABASE_URI']}")
 
     # Only enable security headers in production
@@ -128,5 +128,7 @@ def create_app(env_name=None):
             session_cookie_secure=False,
             content_security_policy=None
         )
+
+    print("IS BETA: ", app.config['IS_BETA'])
     
     return app
