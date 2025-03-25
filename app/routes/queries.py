@@ -206,6 +206,8 @@ def create_query():
             # Update the user's query usage based on their query
             try:
                 if not update_user_usage(current_user, form.check_interval.data, 'add'):
+                    print("Current user query usage: ", current_user.query_usage)
+                    print("Current user tier: ", current_user.tier)
                     flash('This query would exceed your daily limit', 'danger')
                     return render_template('queries/create.html', form=form)
                 
@@ -305,6 +307,11 @@ def create_query():
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f"Query creation failed: {str(e)}")
+            print("Rolling back user usage")
+            print("Current user query usage: ", current_user.query_usage)
+            print("form.check_interval.data: ", form.check_interval.data)
+            
+            update_user_usage(current_user, form.check_interval.data, 'remove')
             flash('Error creating query: ' + str(e), 'danger')
     else:
         print("Form not validated. Errors:", form.errors)

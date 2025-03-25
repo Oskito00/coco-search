@@ -12,10 +12,14 @@ def calculate_daily_runs(check_interval):
 def update_user_usage(user, query_check_interval, operation='add'):
     """Update user's query usage when adding/removing/pausing queries"""
     try:
+        print("Updating user usage")
         daily_runs = calculate_daily_runs(query_check_interval)
+        print(f"Daily runs: {daily_runs}")
+
         
         if operation == 'add':
             new_usage = user.query_usage + daily_runs
+            print(f"New usage: {new_usage}")
             if new_usage > max(user.tier['query_limit'] - 300, 0):
                 # Calculate how much they need to upgrade
                 needed = new_usage - user.query_usage

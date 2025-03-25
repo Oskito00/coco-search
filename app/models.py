@@ -65,8 +65,9 @@ class User(UserMixin, db.Model):
 class Item(db.Model):
     __tablename__ = 'items'
     item_id = db.Column(
-        db.BigInteger,  # Use BigInteger for PostgreSQL serial types
+        db.BigInteger,
         primary_key=True,
+        server_default=text("nextval('items_item_id_seq'::regclass)")  # Explicit sequence binding
     )
     ebay_id = db.Column(db.String(50), unique=True, nullable=False)
     legacy_id = db.Column(db.String(50))
@@ -145,22 +146,41 @@ class UserQuery(db.Model):
 
 class Keyword(db.Model):
     __tablename__ = 'keywords'
-    keyword_id = db.Column(db.Integer, primary_key=True)
+    keyword_id = db.Column(
+        db.BigInteger,
+        primary_key=True,
+        server_default=text("nextval('keywords_keyword_id_seq')")
+    )
     keyword_text = db.Column(db.String(255), nullable=False)
     
 class KeywordItems(db.Model):
     __tablename__ = 'keyword_items'
-    keyword_id = db.Column(db.Integer, db.ForeignKey('keywords.keyword_id'), primary_key=True, nullable=False)
-    item_id = db.Column(db.Integer, db.ForeignKey('items.item_id'), primary_key=True, nullable=False)
+    keyword_id = db.Column(
+        db.BigInteger,  # Changed from Integer
+        db.ForeignKey('keywords.keyword_id'), 
+        primary_key=True, 
+        nullable=False
+    )
+    item_id = db.Column(
+        db.BigInteger,  # Changed from Integer
+        db.ForeignKey('items.item_id'), 
+        primary_key=True, 
+        nullable=False
+    )
     found_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
     item = db.relationship('Item', backref='keyword_associations')
 
 # Feedback data to train the ML model
 class ItemRelevanceFeedback(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    item_id = db.Column(db.Integer, db.ForeignKey('items.item_id'), nullable=False)
+    id = db.Column(
+        db.BigInteger,  # Changed from Integer
+        primary_key=True,
+        autoincrement=True,  # Explicitly enable auto-increment
+        server_default=text("nextval('item_relevance_feedback_id_seq'::regclass)")
+    )
+    user_id = db.Column(db.BigInteger, db.ForeignKey('users.id'), nullable=False)
+    item_id = db.Column(db.BigInteger, db.ForeignKey('items.item_id'), nullable=False)
     keyword_id = db.Column(db.Integer, db.ForeignKey('keywords.keyword_id'), nullable=False)
     required_keywords = db.Column(db.String(255), nullable=True)
     excluded_keywords = db.Column(db.String(255), nullable=True)
