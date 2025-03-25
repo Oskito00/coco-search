@@ -73,10 +73,6 @@ def run_migrations_offline():
 
 
 def include_object(object, name, type_, reflected, compare_to):
-    if type_ == "table" and name == "apscheduler_jobs":
-        return False
-    if type_ == "index" and name == "ix_apscheduler_jobs_next_run_time":
-        return False
     return True
 
 

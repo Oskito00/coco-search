@@ -8,6 +8,11 @@ from sqlalchemy.dialects.postgresql import NUMERIC, UUID
 from sqlalchemy import JSON, text
 from sqlalchemy.dialects.postgresql import JSONB
 
+class APSchedulerJob(db.Model):
+    __tablename__ = 'apscheduler_jobs'
+    id = db.Column(db.String(191), primary_key=True)
+    next_run_time = db.Column(db.Float)
+    job_state = db.Column(db.LargeBinary)
 
 class User(UserMixin, db.Model):
     __tablename__ = 'users'

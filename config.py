@@ -76,7 +76,7 @@ class DevelopmentConfig(Config):
     SCHEDULER_COALESCE = True
 
     #Mail configs
-    MAIL_DEFAULT_SENDER = ('EbayRPD', 'noreply@ebayrpd.com')
+    MAIL_DEFAULT_SENDER = ('Coco', 'noreply@coco.com')
     MAIL_SERVER = 'smtp.googlemail.com'
     MAIL_PORT = 465
     MAIL_USE_TLS = False

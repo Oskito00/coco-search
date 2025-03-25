@@ -67,7 +67,7 @@ def create_beta_welcome_email(name, email, test_email, test_password):
 
             <!-- Footer -->
             <div style="text-align: center; padding: 20px; color: #999999; font-size: 12px;">
-                <p>© 2025 EbayChecker. All rights reserved.</p>
+                <p>© 2025 Coco. All rights reserved.</p>
             </div>
         </div>
     </body>
