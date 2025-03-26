@@ -116,12 +116,13 @@ class ProductionConfig(Config):
     }
 
     # Mail configs - remove commas at end of lines
-    MAIL_SERVER = 'smtp.mailgun.org'
-    MAIL_PORT = 587
-    MAIL_USE_TLS = True
-    MAIL_USERNAME = 'postmaster@sandbox97899069c87a42bc8be143e9f92ee3a7.mailgun.org'
-    MAIL_PASSWORD = 'd4e78637428d4b2317873133804d0f9c-3d4b3a2a-1002e7c3'
-    MAIL_DEFAULT_SENDER = 'postmaster@sandbox97899069c87a42bc8be143e9f92ee3a7.mailgun.org'
+    MAIL_SERVER = 'smtp.gmail.com'
+    MAIL_PORT = 465
+    MAIL_USE_TLS = False
+    MAIL_USE_SSL = True
+    MAIL_USERNAME = 'oscar.alberigo@gmail.com'
+    MAIL_PASSWORD = 'ufvx hcav zmad gsct'
+    MAIL_DEFAULT_SENDER = 'oscar.alberigo@gmail.com'
 
     DEBUG = False
     SQLALCHEMY_ENGINE_OPTIONS = {
