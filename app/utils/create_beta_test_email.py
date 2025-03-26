@@ -26,7 +26,7 @@ def create_beta_welcome_email(name, email, test_email, test_password):
                 <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; margin: 25px 0;">
                     <p style="margin: 5px 0;">
                         <strong>Test Environment URL:</strong> 
-                        <a href="https://ebaychecker-5222ac845812.herokuapp.com/" style="color: #007bff;">https://ebaychecker-5222ac845812.herokuapp.com/</a>
+                        <a href="https://coco-etb-d8d6f34b56ca.herokuapp.com/" style="color: #007bff;">https://coco-etb-d8d6f34b56ca.herokuapp.com/</a>
                     </p>
                     <p style="margin: 5px 0;">
                         <strong>Test Email:</strong> 
@@ -48,7 +48,7 @@ def create_beta_welcome_email(name, email, test_email, test_password):
 
                 <!-- Login Button -->
                 <div style="text-align: center; margin: 30px 0;">
-                    <a href="https://ebaychecker-5222ac845812.herokuapp.com/" 
+                    <a href="https://coco-etb-d8d6f34b56ca.herokuapp.com/" 
                        style="background-color: #28a745; 
                               color: #ffffff; 
                               padding: 12px 30px;

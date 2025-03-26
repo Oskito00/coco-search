@@ -314,7 +314,24 @@ class EbayAPI:
         response.raise_for_status()
         return response.json()
 
-    
+    def extract_browse_limits(self, rate_data):
+        """Extract browse API rate limits"""
+        for limit in rate_data.get('rateLimits', []):
+            if limit.get('apiContext') == 'buy' and limit.get('apiName') == 'Browse':
+                for resource in limit.get('resources', []):
+                    if resource.get('name') == 'buy.browse':
+                        return resource['rates'][0]
+        return {}
+
+    def extract_search_limits(self, rate_data):
+        """Extract search-related rate limits (often same as browse)"""
+        # If using separate search endpoint, adjust the filter
+        for limit in rate_data.get('rateLimits', []):
+            if limit.get('apiContext') == 'buy' and limit.get('apiName') == 'Browse':
+                for resource in limit.get('resources', []):
+                    if resource.get('name') == 'buy.browse':
+                        return resource['rates'][0]
+        return {}
 
 __all__ = ['EbayAPI']
 

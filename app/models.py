@@ -8,6 +8,9 @@ from sqlalchemy.dialects.postgresql import NUMERIC, UUID
 from sqlalchemy import JSON, text
 from sqlalchemy.dialects.postgresql import JSONB
 
+
+#For some reason with
+
 class APSchedulerJob(db.Model):
     __tablename__ = 'apscheduler_jobs'
     id = db.Column(db.String(191), primary_key=True)
