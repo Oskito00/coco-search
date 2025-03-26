@@ -69,11 +69,7 @@ class User(UserMixin, db.Model):
     
 class Item(db.Model):
     __tablename__ = 'items'
-    item_id = db.Column(
-        db.BigInteger,
-        primary_key=True,
-        server_default=text("nextval('items_item_id_seq'::regclass)")  # Explicit sequence binding
-    )
+    item_id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     ebay_id = db.Column(db.String(50), unique=True, nullable=False)
     legacy_id = db.Column(db.String(50))
     title = db.Column(db.String(255))
@@ -104,7 +100,7 @@ class UserQueryItems(db.Model):
         db.ForeignKey('user_queries.query_id', ondelete='CASCADE'),
         primary_key=True
     )
-    item_id = db.Column(db.Integer, db.ForeignKey('items.item_id'), primary_key=True, nullable=False)
+    item_id = db.Column(db.BigInteger, db.ForeignKey('items.item_id'), primary_key=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     auction_ending_notification_sent = db.Column(db.Boolean, default=False)
 
@@ -154,7 +150,7 @@ class Keyword(db.Model):
     keyword_id = db.Column(
         db.BigInteger,
         primary_key=True,
-        server_default=text("nextval('keywords_keyword_id_seq')")
+        server_default=text("nextval('keywords_keyword_id_seq'::regclass)")
     )
     keyword_text = db.Column(db.String(255), nullable=False)
     
