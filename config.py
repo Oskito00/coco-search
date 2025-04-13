@@ -46,6 +46,18 @@ class Config:
         'client_secret': 'PRD-4c82e5542278-55d5-44a7-a98e-8ca8',
         'token': None,
         'token_expiry': None
+    },
+    {
+        'client_id': 'Cristian-Analysis-PRD-924562b2f-44eeb76f',
+        'client_secret': 'PRD-24562b2f709c-4954-4de8-9832-4155',
+        'token': None,
+        'token_expiry': None
+    },
+    {
+        'client_id': 'LesleyAl-esp32-PRD-10e8fd9f1-89a477f8',
+        'client_secret': 'PRD-0e8fd9f1ff85-1b15-47f2-bf87-f652',
+        'token': None,
+        'token_expiry': None
     }
 ]
     

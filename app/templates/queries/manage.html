@@ -12,6 +12,30 @@
             <h1>Searches</h1>
             <p>Hi, {{ current_user.email }}</p>
             <p class="subtitle">Get notifications for the items that matter to you</p>
+
+            <!-- Usage Bar -->
+            <div class="usage-bar-container">
+                <div class="usage-bar">
+                    {% if current_user.tier.query_limit > 0 %}
+                        <div class="usage-progress" 
+                             style="width: {{ (current_user.query_usage / current_user.tier.query_limit * 100)|round(1) }}%;
+                                    {% if current_user.query_usage >= current_user.tier.query_limit %}background-color: #ff4444;{% endif %}">
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="usage-text">
+                    {% if current_user.tier.query_limit > 0 %}
+                        Using {{ current_user.query_usage }} of {{ current_user.tier.query_limit }} calls per day.
+                        {% if current_user.query_usage >= current_user.tier.query_limit %}
+                            <span class="usage-warning">(Limit reached)</span>
+                        {% elif current_user.query_usage / current_user.tier.query_limit >= 0.8 %}
+                            <span class="usage-warning">(Approaching limit)</span>
+                        {% endif %}
+                    {% else %}
+                        Please upgrade your plan to add more searches
+                    {% endif %}
+                </div>
+            </div>
             
             <div class="manage-actions">
                 <a href="{{ url_for('queries.create_query') }}" class="add-button">
