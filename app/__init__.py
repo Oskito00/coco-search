@@ -3,10 +3,13 @@ from flask import Flask, redirect, request
 from app.extensions import (db, init_scheduler_tables, migrate, login_manager, csrf, encryptor, mail, limiter, scheduler)
 from flask_wtf.csrf import CSRFProtect
 from app.jobs.snyc_jobs import sync_jobs
+from app.utils.print_helpers import print_scheduler_settings
 from .forms import csrf
 import os
-from config import DevelopmentConfig, ProductionConfig, config as app_config
+from config import DevelopmentConfig, ProductionConfig, TestingConfig, config as app_config
 from flask_talisman import Talisman
+from datetime import datetime
+from tzlocal import get_localzone
 
 
 
@@ -35,8 +38,11 @@ def create_app(env_name=None):
     load_dotenv(override=True)
     app = Flask(__name__)
 
-    is_development = app.config.get('FLASK_ENV') == 'development'  # or app.config.get('ENV') == 'development'
-    is_production = app.config.get('FLASK_ENV') == 'production'
+    print("ENV: ", os.environ.get('APP_ENV'))
+
+    is_test = os.environ.get('APP_ENV') == 'testing'
+    is_development = os.environ.get('APP_ENV') == 'development'
+    is_production = os.environ.get('APP_ENV') == 'production'
 
     # Auto-detect environment first
     if os.environ.get('DYNO'):
@@ -48,6 +54,9 @@ def create_app(env_name=None):
                 url = request.url.replace('http://', 'https://', 1)
                 code = 301
                 return redirect(url, code=code)
+    elif is_test:
+        cfg = TestingConfig
+        app.logger.info("🧪 Testing environment detected")
     else:
         cfg = DevelopmentConfig
         app.logger.info("💻 Local development environment detected")
@@ -73,19 +82,30 @@ def create_app(env_name=None):
     limiter.init_app(app)
 
 
-    # Initialize scheduler AFTER database
+    # Initialize scheduler AFTER database with explicit timezone
     scheduler.init_app(app)
+    
+    # Set scheduler timezone to system local timezone (handles DST automatically)
+    local_tz = get_localzone()
+    scheduler.timezone = local_tz
+    print(f"Initialized scheduler with timezone: {local_tz}")
+    print(f"Current time in this timezone: {datetime.now(local_tz)}")
+    
+    # Start the scheduler AFTER setting timezone
     scheduler.start()
+
+    print_scheduler_settings(app, scheduler)
     
     # Add jobs in context
     with app.app_context():
         scheduler.add_job(
-        id='sync_jobs',              # Unique job ID
-        func=sync_jobs,             # Function to execute
-        trigger='interval',         # Trigger type
-        minutes=1,                 # This is a trigger argument
-        replace_existing=True       # Replace if job exists
-    )
+            id='sync_jobs',           # Unique job ID
+            func=sync_jobs,           # Function to execute
+            trigger='interval',       # Trigger type
+            minutes=1,                # This is a trigger argument
+            timezone=local_tz,        # Use the same timezone
+            replace_existing=True     # Replace if job exists
+        )
 
     # Register blueprints
     from app.routes.auth import bp as auth_bp
@@ -114,7 +134,7 @@ def create_app(env_name=None):
     app.register_blueprint(contact_feedback_bp, url_prefix='/contact_feedback')
 
     # Debug output
-    print(f"Active config: {app.config['FLASK_ENV']}")
+    print(f"Active config: {os.environ.get('APP_ENV')}")
     print(f"Database URI: {app.config['SQLALCHEMY_DATABASE_URI']}")
 
     # Only enable security headers in production

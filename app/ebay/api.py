@@ -13,25 +13,11 @@ logger = logging.getLogger(__name__)
 
 class EbayAPI:
     def __init__(self, marketplace='EBAY_GB'):
-        self.token = None
-        self.token_expiry = datetime.min.replace(tzinfo=timezone.utc)
-        self.client_id = current_app.config.get('EBAY_CLIENT_ID')
-        self.client_secret = current_app.config.get('EBAY_CLIENT_SECRET')
+        self.credentials = current_app.config.get('EBAY_CREDENTIALS')
+        self.current_cred_index = 0
         
-        if not self.client_id or not self.client_secret:
-            raise ValueError(
-                "EBAY_CLIENT_ID and EBAY_CLIENT_SECRET must be set in the environment or config"
-            )
         self.token_url = "https://api.ebay.com/identity/v1/oauth2/token"
         self.base_url = "https://api.ebay.com/buy/browse/v1"
-        self.headers = {
-            'X-EBAY-C-MARKPLACE-ID': marketplace,
-            'X-EBAY-C-CURRENCY': MARKETPLACE_IDS[marketplace]['currency'],
-            'Accept-Language': MARKETPLACE_IDS[marketplace]['language'],
-            'Content-Language': MARKETPLACE_IDS[marketplace]['language'], 
-            'Authorization': f'Bearer {self._get_token()}',
-            'Content-Type': 'application/json'
-        }
         self.marketplace = marketplace
         self.marketplace_config = MARKETPLACE_IDS.get(
             marketplace, 
@@ -39,47 +25,62 @@ class EbayAPI:
         )
         self.country_code = self.marketplace_config['location']
         self.currency = self.marketplace_config['currency']
-        self._get_token()  # Fetch initial token
         self.session = requests.Session()
         adapter = requests.adapters.HTTPAdapter(
-            pool_connections=10,  # Allow 10 simultaneous connections
-            pool_maxsize=100      # Queue up to 100 requests
+        pool_connections=30,     # Increased from 10 to 30 simultaneous connections
+        pool_maxsize=200,        # Increased from 100 to 200 queued requests
+        max_retries=3            # Add retry capability for transient errors
         )
         self.session.mount('https://', adapter)
     
-    def _token_needs_refresh(self):
-        """Check if token needs refresh (60 second buffer)"""
-        if not self.token:
-            return True  # No token exists
-        return datetime.now(timezone.utc) > (self.token_expiry - timedelta(seconds=60))
+    def _get_current_credential(self):
+        """Get current credential and rotate index for next call"""
+        cred = self.credentials[self.current_cred_index]
+           
+        logger.debug(f"Using credential index {self.current_cred_index}")
+
+        # Move to next credential for subsequent calls
+        self.current_cred_index = (self.current_cred_index + 1) % len(self.credentials)
+        return cred
+    
+    def _token_needs_refresh(self, cred):
+        """Check if specific credential needs refresh"""
+        if not cred['token']:
+            return True
+        return datetime.now(timezone.utc) > (cred['token_expiry'] - timedelta(seconds=60))
 
     def _get_token(self):
-        """Main token acquisition method"""
-        if not self._token_needs_refresh():
-            return self.token
-        
-        # Refresh token if needed
-        auth = (self.client_id, self.client_secret)
-        data = {
+        """Get token from current credential, refresh if needed"""
+        # Get next credential in rotation
+        cred = self._get_current_credential()
+    
+        # Refresh if needed (your original logic adapted)
+        if self._token_needs_refresh(cred):
+            auth = (cred['client_id'], cred['client_secret'])
+            data = {
             'grant_type': 'client_credentials',
             'scope': ' '.join([
-                'https://api.ebay.com/oauth/api_scope',  # Public data
+                'https://api.ebay.com/oauth/api_scope',
             ])
         }
-        response = requests.post(
+        
+            response = requests.post(
             self.token_url,
             auth=auth,
             headers={'Content-Type': 'application/x-www-form-urlencoded'},
             data=data
-        )
-        response.raise_for_status()
+            )
+            response.raise_for_status()
         
-        token_data = response.json()
-        self.token = token_data['access_token']
-        self.token_expiry = datetime.now(timezone.utc) + timedelta(
-            seconds=token_data['expires_in']
-        )
-        return self.token
+            token_data = response.json()
+            cred.update({
+            'token': token_data['access_token'],
+            'token_expiry': datetime.now(timezone.utc) + timedelta(
+                seconds=token_data['expires_in']
+            )
+        })
+    
+        return cred['token']
     
     def raw_search(self, keywords, filters=None, limit=200, offset=0, sort_order=None):
         """Search with optional sorting"""
@@ -87,12 +88,12 @@ class EbayAPI:
         filters = filters or {}
 
         # Gets a token if already present, if not generates a new one
-        self._get_token()
+        token = self._get_token()
         self.marketplace = self.marketplace.replace('_', '-')
         print("Marketplace going into raw search:", self.marketplace)
 
         headers = {
-            'Authorization': f'Bearer {self.token}',
+            'Authorization': f'Bearer {token}',
             'X-EBAY-C-MARKETPLACE-ID': self.marketplace,
             'X-EBAY-C-CURRENCY': self.currency,
             'Content-Language': self.marketplace_config['language'],
@@ -121,9 +122,9 @@ class EbayAPI:
             params=params
         )
         print(f"Request URL: {response.request.url}")
-        print(response.headers)
         
         if response.status_code == 429:
+            print("Response was 429 for token: ", token)
             sleep_time = int(response.headers.get('Retry-After', 60))
             time.sleep(sleep_time)
             return self.raw_search(keywords, filters, limit, offset)
@@ -136,10 +137,8 @@ class EbayAPI:
         The user can decide what they want to search for in this function
         Examples include: All items, only the first 200 items, the sold items (no longer active)
         """
-        print("Marketplace before reading query marketplace:", self.marketplace)
         if marketplace:
             self.marketplace = marketplace
-        print("Marketplace after reading query marketplace (if any):", self.marketplace)
 
         returned_items = []
         pages_searched = 0
@@ -163,7 +162,6 @@ class EbayAPI:
                 returned_items.extend(filtered_batch)
             
                 offset += len(parsed_items)
-                print("pages")
                 pages_searched += 1
 
                 # Break if last page
@@ -187,7 +185,6 @@ class EbayAPI:
                 # Optional: Keep items without IDs or skip them
                 unique_items.append(item)  # Remove this line to exclude items without IDs
         
-        print(f"Removed {len(returned_items) - len(unique_items)} duplicates")
         return unique_items
         
     def _build_filter(self, filters):

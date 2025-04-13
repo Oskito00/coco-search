@@ -27,8 +27,11 @@ def update_user_usage(user, query_check_interval, operation='add'):
                     f"Activating this query would exceed your daily limit. "
                     "Please upgrade your plan."
                 )
-            user.query_usage = new_usage
+            else:
+                print("New usage is within limit")
+                user.query_usage = new_usage
         elif operation == 'remove':
+            print("Removing queries")
             user.query_usage = max(0, user.query_usage - daily_runs)
         else:
             raise ValueError("Invalid operation")
