@@ -51,10 +51,10 @@ class User(UserMixin, db.Model):
     current_period_end = db.Column(db.DateTime)
     requested_change = db.Column(JSONB().with_variant(
         db.JSON(), 'sqlite'
-    ), default={'new_tier': 'pro', 'when': 'now|renewal'})
+    ))
     pending_tier = db.Column(JSONB().with_variant(
         db.JSON(), 'sqlite'
-    ), default={'name': 'pro', 'query_limit': 100})
+    ))
     pending_effective_date = db.Column(db.DateTime)
     cancellation_requested = db.Column(db.Boolean, default=False)
     last_checkout_session_id = db.Column(db.String(100))

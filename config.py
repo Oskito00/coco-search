@@ -9,6 +9,10 @@ load_dotenv(override=True)  # Load .env file
 project_root = os.path.abspath(os.path.dirname(__file__))
 
 class Config:
+    # Load from environment first
+    ENV = os.environ.get('APP_ENV', 'production')
+    DEBUG = os.environ.get('FLASK_DEBUG', '0') == '1'
+    
     SECRET_KEY = os.getenv('SECRET_KEY')
     ENCRYPTION_KEY = os.getenv('ENCRYPTION_KEY')
 
@@ -30,6 +34,21 @@ class Config:
     LOG_LEVEL = 'INFO'
     TESTING = False
 
+    EBAY_CREDENTIALS = [
+    {
+        'client_id': 'OscarAlb-Monitor-PRD-5ded7de14-d6ea23c9',
+        'client_secret': 'PRD-ded7de147834-332f-4231-8b70-afea',
+        'token': None,          # Will be populated automatically
+        'token_expiry': None   # Will be populated automatically
+    },
+    {
+        'client_id': 'RoryAlbe-Itemsear-PRD-f4c82e554-b68b4152',
+        'client_secret': 'PRD-4c82e5542278-55d5-44a7-a98e-8ca8',
+        'token': None,
+        'token_expiry': None
+    }
+]
+    
     #Gmail authentication
     SECURITY_PASSWORD_SALT = os.getenv('SECURITY_PASSWORD_SALT')
 
@@ -53,17 +72,10 @@ class Config:
         return getattr(cls, key, default)
 
 class TestingConfig(Config):
-    EBAY_CLIENT_ID = os.getenv('EBAY_CLIENT_ID')
-    EBAY_CLIENT_SECRET = os.getenv('EBAY_CLIENT_SECRET')
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
-    WTF_CSRF_ENABLED = False
+    ENV = 'testing'
     TESTING = True
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
-    TELEGRAM_BOT_TOKEN = '7914809074'
-
-class DevelopmentConfig(Config):
-    FLASK_ENV = 'development'
-    SQLALCHEMY_DATABASE_URI = "postgresql:///ebay_checker" 
+    DEBUG = False
+    SQLALCHEMY_DATABASE_URI = "postgresql:///ebay_checker_test" 
 
     # Scheduler
     SCHEDULER_JOBSTORES = {
@@ -72,8 +84,22 @@ class DevelopmentConfig(Config):
             'url': SQLALCHEMY_DATABASE_URI  # Use your existing database URI
         }
     }
-    SCHEDULER_EXECUTORS = {'default': {'type': 'threadpool', 'max_workers': 20}}
+    SCHEDULER_EXECUTORS = {'default': {'type': 'threadpool', 'max_workers': 50}}
     SCHEDULER_COALESCE = True
+    SCHEDULER_JOB_DEFAULTS = {
+        'coalesce': False,           # Process all missed job runs
+        'max_instances': 10,         # Allow multiple instances of the same job
+        'misfire_grace_time': 3600   # 1 hour grace time for missed jobs
+    }
+
+    # Improved database connection pool settings
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_size': 20,             # Increase from current 10
+        'max_overflow': 30,          # Increase from current 20
+        'pool_timeout': 30,          # Increase from current 10
+        'pool_recycle': 1800,        # 30 minutes instead of 5 minutes
+        'pool_pre_ping': True        # Keep this setting
+    }
 
     #Mail configs
     MAIL_DEFAULT_SENDER = ('Coco', 'noreply@coco.com')
@@ -93,26 +119,96 @@ class DevelopmentConfig(Config):
     STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')
 
     SQLALCHEMY_ECHO = False
-    DEBUG = False
     FORCE_HTTPS = False
 
     # Read IS_BETA from the environment variable
     IS_BETA = False
 
+class DevelopmentConfig(Config):
+    ENV = 'development'
+    DEBUG = True
+    FLASK_ENV = 'development'
+    SQLALCHEMY_DATABASE_URI = "postgresql:///ebay_checker" 
+
+    # Scheduler
+    SCHEDULER_JOBSTORES = {
+        'default': {
+            'type': 'sqlalchemy',
+            'url': SQLALCHEMY_DATABASE_URI  # Use your existing database URI
+        }
+    }
+    SCHEDULER_EXECUTORS = {'default': {'type': 'threadpool', 'max_workers': 50}}
+    SCHEDULER_COALESCE = True
+    SCHEDULER_JOB_DEFAULTS = {
+        'coalesce': False,           # Process all missed job runs
+        'max_instances': 10,         # Allow multiple instances of the same job
+        'misfire_grace_time': 3600   # 1 hour grace time for missed jobs
+    }
+
+    # Improved database connection pool settings
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_size': 20,             # Increase from current 10
+        'max_overflow': 30,          # Increase from current 20
+        'pool_timeout': 30,          # Increase from current 10
+        'pool_recycle': 1800,        # 30 minutes instead of 5 minutes
+        'pool_pre_ping': True        # Keep this setting
+    }
+
+    #Mail configs
+    MAIL_DEFAULT_SENDER = ('Coco', 'noreply@coco.com')
+    MAIL_SERVER = 'smtp.googlemail.com'
+    MAIL_PORT = 465
+    MAIL_USE_TLS = False
+    MAIL_USE_SSL = True
+    MAIL_USERNAME = os.getenv('MAIL_USERNAME')
+    MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
+
+    #Stripe
+    STRIPE_PRICE_INDIVIDUAL = os.getenv('STRIPE_PRICE_INDIVIDUAL')
+    STRIPE_PRICE_BUSINESS = os.getenv('STRIPE_PRICE_BUSINESS')
+    STRIPE_PRICE_PRO = os.getenv('STRIPE_PRICE_PRO')
+    STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')
+    STRIPE_PUBLISHABLE_KEY = os.getenv('STRIPE_PUBLISHABLE_KEY')
+    STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')
+
+    SQLALCHEMY_ECHO = False
+    FORCE_HTTPS = False
+
+    # Read IS_BETA from the environment variable
+    IS_BETA = True
+
 class ProductionConfig(Config):
+    ENV = 'production'
+    DEBUG = False
     FLASK_ENV = 'production'
+
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', '').replace(
         'postgres://', 'postgresql://', 1
     ) + '?sslmode=require'
 
+    # Scheduler
+    SCHEDULER_JOBSTORES = {
+        'default': {
+            'type': 'sqlalchemy',
+            'url': SQLALCHEMY_DATABASE_URI  # Use your existing database URI
+        }
+    }
+
+    SCHEDULER_EXECUTORS = {'default': {'type': 'threadpool', 'max_workers': 50}}
+    SCHEDULER_COALESCE = True
+    SCHEDULER_JOB_DEFAULTS = {
+        'coalesce': False,           # Process all missed job runs
+        'max_instances': 10,         # Allow multiple instances of the same job
+        'misfire_grace_time': 3600   # 1 hour grace time for missed jobs
+    }
+
+    # Improved database connection pool settings
     SQLALCHEMY_ENGINE_OPTIONS = {
-        'connect_args': {
-            'sslmode': 'require',
-            'sslrootcert': os.path.join(os.path.dirname(__file__), 'prod-ca-certificate.crt')
-        },
-        'pool_size': 5,
-        'max_overflow': 10,
-        'pool_recycle': 300,
+        'pool_size': 20,             # Increase from current 10
+        'max_overflow': 30,          # Increase from current 20
+        'pool_timeout': 30,          # Increase from current 10
+        'pool_recycle': 1800,        # 30 minutes instead of 5 minutes
+        'pool_pre_ping': True        # Keep this setting
     }
 
     # Mail configs - remove commas at end of lines
@@ -145,8 +241,6 @@ class ProductionConfig(Config):
     SECURITY_HSTS_SECONDS = 31536000  # 1 year
     SECURITY_HSTS_INCLUDE_SUBDOMAINS = True
     SECURITY_HSTS_PRELOAD = True
-
-    
 
     def __init__(self):
         self.validate_mail_config()

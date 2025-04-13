@@ -62,7 +62,6 @@ def recent_scrape_job(query_id):
             session = db.session
             with session.begin():
                 query = UserQuery.query.get(query_id)
-                print(f"[Job {query_id}] Query: {query}")
                 if not query or not query.is_active:
                     print(f"[Job {query_id}] Aborting - no active query")
                     return
@@ -107,17 +106,13 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
                 keyword_id=keyword.keyword_id
             ).one_or_none()
             if feedback:
-                print(f"Is relevant: {feedback.is_relevant}")
+                pass
             else:
                 feedback = None
-                print(f"No feedback found")
         if first_run:
             if existing:
                 # Check if the item is already linked to this keyword, if not add the link
                 if not KeywordItems.query.filter_by(keyword_id=keyword.keyword_id, item_id=existing.item_id).first():
-                    print(f"[Process Items] Linking existing item {existing.item_id} to keyword {keyword.keyword_text}")
-                    print(f"existing market: {existing.marketplace}")
-                    print(f"existing country: {existing.location_country}")
                     db.session.add(KeywordItems(keyword_id=keyword.keyword_id, item_id=existing.item_id))
                 # Check if the item is already linked to the query
                 if not UserQueryItems.query.filter_by(query_id=query.query_id, item_id=existing.item_id).first():
@@ -125,8 +120,6 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
                         #If the item has already been marked as irrelevant for this keyword by the user, don't link it to the query
                         continue
                     else:
-                        print(f"existing market: {existing.marketplace}")
-                        print(f"existing country: {existing.location_country}")
                         db.session.add(UserQueryItems(query_id=query.query_id, item_id=existing.item_id, created_at=current_time))
                         # Add the item to the list of new items for the query
             else:
@@ -137,14 +130,8 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
                 new_item.location_country = item_data.get('location', {}).get('country')
                 new_item.postal_code = item_data.get('location', {}).get('postal_code')
                 db.session.add(new_item)
-                print(f"[Process Items] Item {idx+1}/{len(items)}: New item created (eBay ID: {item_data['ebay_id']})")
-
-                print(f"new item market: {new_item.marketplace}")
-                print(f"new item country: {new_item.location_country}")
                 # Flush to get the new item ID
                 db.session.flush()
-
-                print(f"[Process Items] Linking new item {new_item.item_id} to keyword {keyword.keyword_text}")
             
                 # Link to keyword
                 db.session.add(KeywordItems(
@@ -153,7 +140,6 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
                 found_at=current_time
                 ))
 
-                print(f"[Process Items] Linking new item {new_item.item_id} to query {query.query_id}")
                 # Link to user query
                 db.session.add(UserQueryItems(
                 query_id=query.query_id,
@@ -172,7 +158,6 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
                     db.session.add(KeywordItems(keyword_id=keyword.keyword_id, item_id=existing.item_id))
                 # Check if the item is already linked to the query
                 if not UserQueryItems.query.filter_by(query_id=query.query_id, item_id=existing.item_id).first():
-                    print(f"[Process Items] Linking existing item {existing.item_id} to query {query.query_id}")
                     # If not add the link and include in new_items for notification
                     if feedback and feedback.is_relevant is False:
                         #If the item has already been marked as irrelevant for this keyword by the user, don't link it to the query
@@ -189,7 +174,6 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
                 new_item.postal_code = item_data.get('location', {}).get('postal_code')
                 db.session.add(new_item)
                 new_items.append(new_item)
-                print(f"[Process Items] Item {idx+1}/{len(items)}: New item created (eBay ID: {item_data['ebay_id']})")
 
                 # Flush to get the new item ID
                 db.session.flush()
@@ -236,7 +220,6 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
 
         # Auction ending detection (now global)
         end_time = item_data.get('end_time')
-        print(f"[Process Items] Auction ending detection: {end_time}")
         if end_time:
             end_time = end_time.replace(tzinfo=timezone.utc)
             if (end_time - current_time) < timedelta(hours=12):
@@ -252,9 +235,6 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
     
     try:
         db.session.commit()
-        print(f"[Process Items] Commit successful")
-        print(f"[Process Items] New items: {len(new_items)}, Updated items: {len(updated_items)}")
-        print(f"[Process Items] Price drops: {len(price_drops)}, Ending auctions: {len(ending_auctions)}")
 
         if notify:
             # Notify only for this query's user
@@ -273,14 +253,11 @@ def process_items(items, query, check_existing=False, full_scan=False, notify=Tr
                     NotificationManager.send_price_drops(user, price_drops, query.keyword.keyword_text)
 
             if ending_auctions:
-                print(f"[Process Items] Auction ending detection: {ending_auctions}")
                 if ending_auctions and prefs.get('auction_alerts', True):
                     notification_counts['auction_alerts'] = len(ending_auctions)
-                    print(f"[Process Items] Sending auction alerts for {len(ending_auctions)} items")
                     NotificationManager.send_auction_alerts(user, ending_auctions, query.keyword.keyword_text)
 
-            print(f"[Process Items] Notifications sent: {notification_counts}")
-
+        print(f"Finished processing for query {query.query_id}")
         return new_items, updated_items
 
     except Exception as e:
