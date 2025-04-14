@@ -67,8 +67,6 @@ class Config:
     @classmethod
     def verify(cls):
         required = {
-            'EBAY_CLIENT_ID': cls.EBAY_CLIENT_ID,
-            'EBAY_CLIENT_SECRET': cls.EBAY_CLIENT_SECRET,
             'ENCRYPTION_KEY': cls.ENCRYPTION_KEY
         }
         
@@ -233,10 +231,6 @@ class ProductionConfig(Config):
     MAIL_DEFAULT_SENDER = 'oscar.alberigo@gmail.com'
 
     DEBUG = False
-    SQLALCHEMY_ENGINE_OPTIONS = {
-        'echo_pool': False,
-        'hide_parameters': True
-    }
 
     SCHEDULER_RUN = os.environ.get('DYNO') in ('web.1', None)
     SCHEDULER_API_ENABLED = False
