@@ -14,7 +14,6 @@ class Config:
     DEBUG = os.environ.get('FLASK_DEBUG', '0') == '1'
     
     SECRET_KEY = os.getenv('SECRET_KEY')
-    ENCRYPTION_KEY = os.getenv('ENCRYPTION_KEY')
 
     TIMEZONE = os.getenv('TIMEZONE', 'Europe/London')
 
@@ -24,6 +23,8 @@ class Config:
     EBAY_API_URL = os.getenv('EBAY_API_URL')
     EBAY_CLIENT_ID = os.getenv('EBAY_CLIENT_ID')
     EBAY_CLIENT_SECRET = os.getenv('EBAY_CLIENT_SECRET')
+    ENCRYPTION_KEY = os.getenv('ENCRYPTION_KEY')
+
     EBAY_ACCESS_TOKEN = os.getenv('EBAY_ACCESS_TOKEN')
 
     WTF_CSRF_ENABLED = True
@@ -67,8 +68,6 @@ class Config:
     @classmethod
     def verify(cls):
         required = {
-            'EBAY_CLIENT_ID': cls.EBAY_CLIENT_ID,
-            'EBAY_CLIENT_SECRET': cls.EBAY_CLIENT_SECRET,
             'ENCRYPTION_KEY': cls.ENCRYPTION_KEY
         }
         
