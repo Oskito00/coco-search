@@ -37,7 +37,9 @@ talisman = Talisman(
 
 def create_app(env_name=None):
     load_dotenv(override=True)
-    app = Flask(__name__)
+    app = Flask(__name__, 
+                static_folder='static',  # Explicitly set static folder
+                static_url_path='/static')  # Explicitly set URL path
 
     print("ENV: ", os.environ.get('APP_ENV'))
 
@@ -64,6 +66,11 @@ def create_app(env_name=None):
     
     # Load configuration
     app.config.from_object(cfg)
+    
+    # Enable proper static file serving
+    if not app.debug:
+        # Fix for production static files
+        app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 31536000  # 1 year
     
     # Verify configuration after loading
     try:
