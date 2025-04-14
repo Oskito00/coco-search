@@ -58,6 +58,12 @@ class Config:
         'client_secret': 'PRD-0e8fd9f1ff85-1b15-47f2-bf87-f652',
         'token': None,
         'token_expiry': None
+    },
+    {
+        'client_id': 'LaurenAl-weekend-PRD-b0e716ac4-a19c504a',
+        'client_secret': 'PRD-0e716ac46200-c9d9-400e-b850-2579',
+        'token': None,
+        'token_expiry': None
     }
 ]
     
