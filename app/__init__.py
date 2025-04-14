@@ -1,5 +1,6 @@
 from dotenv import load_dotenv
 from flask import Flask, redirect, request
+import pytz
 from app.extensions import (db, init_scheduler_tables, migrate, login_manager, csrf, encryptor, mail, limiter, scheduler)
 from flask_wtf.csrf import CSRFProtect
 from app.jobs.snyc_jobs import sync_jobs
@@ -85,11 +86,29 @@ def create_app(env_name=None):
     # Initialize scheduler AFTER database with explicit timezone
     scheduler.init_app(app)
     
-    # Set scheduler timezone to system local timezone (handles DST automatically)
-    local_tz = get_localzone()
-    scheduler.timezone = local_tz
-    print(f"Initialized scheduler with timezone: {local_tz}")
-    print(f"Current time in this timezone: {datetime.now(local_tz)}")
+    # Set scheduler timezone with better debugging and error handling
+    try:
+        scheduler_tz = os.environ.get('SCHEDULER_TIMEZONE')
+        print(f"Raw SCHEDULER_TIMEZONE env var: '{scheduler_tz}'")
+        
+        if scheduler_tz and scheduler_tz.strip():
+            # Use environment variable if provided and not empty
+            local_tz = pytz.timezone(scheduler_tz.strip())
+            print(f"Using timezone from environment: {local_tz}")
+        else:
+            # Fall back to auto-detection
+            local_tz = get_localzone()
+            print(f"Environment variable not found, using local timezone: {local_tz}")
+        
+        # Explicitly set scheduler timezone
+        scheduler.timezone = local_tz
+        print(f"Scheduler timezone set to: {scheduler.timezone}")
+        print(f"Current time in this timezone: {datetime.now(local_tz)}")
+        
+    except Exception as e:
+        print(f"ERROR setting timezone: {str(e)}")
+        print(f"Falling back to UTC")
+        scheduler.timezone = pytz.UTC
     
     # Start the scheduler AFTER setting timezone
     scheduler.start()
