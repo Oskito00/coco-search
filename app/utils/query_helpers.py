@@ -27,6 +27,7 @@ def update_user_usage(user, query_check_interval, operation='add'):
                     f"Activating this query would exceed your daily limit. "
                     "Please upgrade your plan."
                 )
+            
             else:
                 print("New usage is within limit")
                 user.query_usage = new_usage

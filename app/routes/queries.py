@@ -202,8 +202,7 @@ def create_query():
         form.check_interval.data = 5  # Default to 5 minutes
     if form.validate_on_submit():
         try:
-
-            # Update the user's query usage based on their query
+            
             try:
                 if not update_user_usage(current_user, form.check_interval.data, 'add'):
                     print("Current user query usage: ", current_user.query_usage)
@@ -241,18 +240,23 @@ def create_query():
                 
                 if existing_query:
                     flash('You already have a query with this keyword and marketplace', 'danger')
+                    print("Rolling back user usage")
+                    print("Current user query usage: ", current_user.query_usage)
+                    print("form.check_interval.data: ", form.check_interval.data)
+                    update_user_usage(current_user, form.check_interval.data, 'remove')
                     return render_template('queries/create.html', form=form)
+        
                 
-                # Proceed with query creation
-                new_user_query = UserQuery()
-                form.populate_obj(new_user_query)
-                new_user_query.user_id = current_user.id
-                new_user_query.keyword_id = keyword_id
-                new_user_query.created_at = datetime.now(timezone.utc)
-                new_user_query.is_active = True
+                else: # Proceed with query creation
+                    new_user_query = UserQuery()
+                    form.populate_obj(new_user_query)
+                    new_user_query.user_id = current_user.id
+                    new_user_query.keyword_id = keyword_id
+                    new_user_query.created_at = datetime.now(timezone.utc)
+                    new_user_query.is_active = True
                 
-                db.session.add(new_user_query)
-                db.session.commit()
+                    db.session.add(new_user_query)
+                    db.session.commit()
             
             #Load historical data if exists
             target_country = new_user_query.item_location
