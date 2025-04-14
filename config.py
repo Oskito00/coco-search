@@ -14,6 +14,7 @@ class Config:
     DEBUG = os.environ.get('FLASK_DEBUG', '0') == '1'
     
     SECRET_KEY = os.getenv('SECRET_KEY')
+    ENCRYPTION_KEY = os.getenv('ENCRYPTION_KEY')
 
     TIMEZONE = os.getenv('TIMEZONE', 'Europe/London')
 
@@ -23,8 +24,6 @@ class Config:
     EBAY_API_URL = os.getenv('EBAY_API_URL')
     EBAY_CLIENT_ID = os.getenv('EBAY_CLIENT_ID')
     EBAY_CLIENT_SECRET = os.getenv('EBAY_CLIENT_SECRET')
-    ENCRYPTION_KEY = os.getenv('ENCRYPTION_KEY')
-
     EBAY_ACCESS_TOKEN = os.getenv('EBAY_ACCESS_TOKEN')
 
     WTF_CSRF_ENABLED = True
@@ -68,6 +67,8 @@ class Config:
     @classmethod
     def verify(cls):
         required = {
+            'EBAY_CLIENT_ID': cls.EBAY_CLIENT_ID,
+            'EBAY_CLIENT_SECRET': cls.EBAY_CLIENT_SECRET,
             'ENCRYPTION_KEY': cls.ENCRYPTION_KEY
         }
         
@@ -213,14 +214,13 @@ class ProductionConfig(Config):
         'misfire_grace_time': 3600   # 1 hour grace time for missed jobs
     }
 
-    # FIXED: Merge engine options instead of overwriting
+    # Improved database connection pool settings
     SQLALCHEMY_ENGINE_OPTIONS = {
-        # Connection pool settings
-        'pool_size': 20,
-        'max_overflow': 30,
-        'pool_timeout': 30,
-        'pool_recycle': 1800,
-        'pool_pre_ping': True,
+        'pool_size': 20,             # Increase from current 10
+        'max_overflow': 30,          # Increase from current 20
+        'pool_timeout': 30,          # Increase from current 10
+        'pool_recycle': 1800,        # 30 minutes instead of 5 minutes
+        'pool_pre_ping': True        # Keep this setting
     }
 
     # Mail configs - remove commas at end of lines
@@ -233,6 +233,11 @@ class ProductionConfig(Config):
     MAIL_DEFAULT_SENDER = 'oscar.alberigo@gmail.com'
 
     DEBUG = False
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'echo_pool': False,
+        'hide_parameters': True
+    }
+
     SCHEDULER_RUN = os.environ.get('DYNO') in ('web.1', None)
     SCHEDULER_API_ENABLED = False
 
