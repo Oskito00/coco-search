@@ -135,4 +135,4 @@ def test_scheduler_with_100_queries(app, test_user):
         
         # Continue with monitoring phase...
         logger.info("Starting 5-minute monitoring period...")
-        time.sleep(300)
+        time.sleep(900)
