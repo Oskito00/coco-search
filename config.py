@@ -213,13 +213,14 @@ class ProductionConfig(Config):
         'misfire_grace_time': 3600   # 1 hour grace time for missed jobs
     }
 
-    # Improved database connection pool settings
+    # FIXED: Merge engine options instead of overwriting
     SQLALCHEMY_ENGINE_OPTIONS = {
-        'pool_size': 20,             # Increase from current 10
-        'max_overflow': 30,          # Increase from current 20
-        'pool_timeout': 30,          # Increase from current 10
-        'pool_recycle': 1800,        # 30 minutes instead of 5 minutes
-        'pool_pre_ping': True        # Keep this setting
+        # Connection pool settings
+        'pool_size': 20,
+        'max_overflow': 30,
+        'pool_timeout': 30,
+        'pool_recycle': 1800,
+        'pool_pre_ping': True,
     }
 
     # Mail configs - remove commas at end of lines
@@ -232,11 +233,6 @@ class ProductionConfig(Config):
     MAIL_DEFAULT_SENDER = 'oscar.alberigo@gmail.com'
 
     DEBUG = False
-    SQLALCHEMY_ENGINE_OPTIONS = {
-        'echo_pool': False,
-        'hide_parameters': True
-    }
-
     SCHEDULER_RUN = os.environ.get('DYNO') in ('web.1', None)
     SCHEDULER_API_ENABLED = False
 
