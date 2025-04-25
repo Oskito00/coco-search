@@ -98,6 +98,14 @@ MARKETPLACE_IDS = {
         'site': 'ebay.pl',
         'currency': 'PLN',
         'language': 'pl-PL'
+    },
+    'EBAY_ANY': {
+        'code': 'EBAY_ANY',
+        'location': 'any',
+        'country': 'ANY',
+        'site': 'ebay.com',
+        'currency': 'USD',
+        'language': 'en-US'
     }
 }
 

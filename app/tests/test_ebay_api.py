@@ -200,8 +200,9 @@ def test_search_new_items(app):
 
 def test_search_raw_response(app):
     with app.app_context():
-        api = EbayAPI("EBAY_GB")
-        raw_response = api.raw_search("iphone", limit=1)  # Get raw response
+        api = EbayAPI("EBAY_US")
+        raw_response = api.raw_search("iphone",filters={'item_location': 'any', 'min_price': 100, 'max_price': 200}, limit=1)  # Get raw response
+
         items = api.parse_response(raw_response)  # Processed items
         
         print("\n=== Raw Response Type ===")
@@ -213,7 +214,8 @@ def test_search_raw_response(app):
         
         if items:
             print("\n=== First Item ===")
-            print(items[0])
+            for item in items:
+                print(item)
         else:
             print("No items found in parsed response")
 

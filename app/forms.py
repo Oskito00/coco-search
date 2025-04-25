@@ -69,7 +69,7 @@ class QueryForm(FlaskForm):
             (l['location'], f"{l['country']}") 
             for l in MARKETPLACE_IDS.values()
         ],
-        default='GB'
+        default='any'
     )
 
     condition = SelectField(

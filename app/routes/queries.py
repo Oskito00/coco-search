@@ -84,14 +84,18 @@ def edit_query(query_id):
                 new_marketplace = form.marketplace.data
                 print("New location:", (new_location))
                 print("New marketplace:", (new_marketplace))
+                if new_location == 'any':
+                    new_location = None
                 # 1. Remove non-matching items and items that don't match new location specified in the query
                 query_items = UserQueryItems.query.filter_by(query_id=query_id).all()
                 print("Query items currently in query:", len(query_items))
                 deletions = [
                     qi for qi in query_items
-                    if not item_matches_keywords(qi.item, form.required_keywords.data, form.excluded_keywords.data)
-                    or qi.item.location_country != new_location
-                    or qi.item.marketplace != new_marketplace
+                    if (
+                        not item_matches_keywords(qi.item, form.required_keywords.data, form.excluded_keywords.data)
+                        or (new_location is not None and qi.item.location_country != new_location)
+                        or qi.item.marketplace != new_marketplace
+                    )
                 ]
                 print("Deletions:", len(deletions))
                 # 2. Find new items to add (that match both keyword and new filters)
@@ -103,6 +107,7 @@ def edit_query(query_id):
                     .where(UserQueryItems.query_id == query_id)\
                     .scalar_subquery()
 
+                
                 # Get items in keyword items that match the new filters, avoiding the ones already in the query
                 potential_items = db.session.query(Item)\
                     .join(KeywordItems, Item.item_id == KeywordItems.item_id)\
@@ -115,7 +120,8 @@ def edit_query(query_id):
                     )\
                     .filter(
                         KeywordItems.keyword_id == keyword_id,
-                        Item.location_country == new_location,
+                        # Conditionally add location filter
+                        *([Item.location_country == new_location] if new_location is not None else []),
                         Item.marketplace == new_marketplace,
                         ~Item.item_id.in_(existing_items_subquery),
                         db.or_(

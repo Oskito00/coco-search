@@ -86,6 +86,7 @@ class EbayAPI:
         """Search with optional sorting"""
         # Initialize filters as empty dict if None
         filters = filters or {}
+        print("Filters:", filters)
 
         # Gets a token if already present, if not generates a new one
         token = self._get_token()
@@ -188,10 +189,16 @@ class EbayAPI:
         return unique_items
         
     def _build_filter(self, filters):
-        filter_parts = [
-            f"itemLocationCountry:{filters.get('item_location', self.country_code)}",
-            f"priceCurrency:{self.currency}"
-        ]
+        item_location = filters.get('item_location')
+        if item_location:
+            print("Item location:", item_location)
+        if item_location != 'any':
+            filter_parts = [
+                f"itemLocationCountry:{item_location}",
+            ]
+        else:
+            filter_parts = [
+            ]
         
         # Buying options filter
         buying_opt = filters.get('buying_options', 'FIXED_PRICE|AUCTION')
@@ -206,6 +213,9 @@ class EbayAPI:
         # Handle price range correctly
         min_price = filters.get('min_price')
         max_price = filters.get('max_price')
+
+        if min_price or max_price:
+            filter_parts.append(f"priceCurrency:{self.currency}")
         
         if min_price is not None or max_price is not None:
             price_filter = 'price:['
@@ -218,6 +228,7 @@ class EbayAPI:
             price_filter += ']'
             filter_parts.append(price_filter)
 
+        print("Filter parts:", filter_parts)
         return ','.join(filter_parts)
     
     def parse_response(self, response):
