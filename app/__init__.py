@@ -160,6 +160,9 @@ def create_app(env_name=None):
     from app.routes.contact_feedback import bp as contact_feedback_bp
     app.register_blueprint(contact_feedback_bp, url_prefix='/contact_feedback')
 
+    from app.routes.legal import legal_bp
+    app.register_blueprint(legal_bp, url_prefix='/legal')
+
     # Debug output
     print(f"Active config: {os.environ.get('APP_ENV')}")
     print(f"Database URI: {app.config['SQLALCHEMY_DATABASE_URI']}")

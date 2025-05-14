@@ -191,7 +191,7 @@ class DevelopmentConfig(Config):
     FORCE_HTTPS = False
 
     # Read IS_BETA from the environment variable
-    IS_BETA = True
+    IS_BETA = False
 
 class ProductionConfig(Config):
     ENV = 'production'
