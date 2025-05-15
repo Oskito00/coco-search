@@ -124,7 +124,7 @@ class TestingConfig(Config):
     }
 
     #Mail configs
-    MAIL_DEFAULT_SENDER = ('Coco', 'noreply@coco.com')
+    MAIL_DEFAULT_SENDER = ('Coco', 'cocosearchhelp@gmail.com')
     MAIL_SERVER = 'smtp.googlemail.com'
     MAIL_PORT = 465
     MAIL_USE_TLS = False
@@ -177,7 +177,7 @@ class DevelopmentConfig(Config):
     }
 
     #Mail configs
-    MAIL_DEFAULT_SENDER = ('Coco', 'noreply@coco.com')
+    MAIL_DEFAULT_SENDER = ('Coco', 'cocosearchhelp@gmail.com')
     MAIL_SERVER = 'smtp.googlemail.com'
     MAIL_PORT = 465
     MAIL_USE_TLS = False
@@ -240,7 +240,7 @@ class ProductionConfig(Config):
     MAIL_USE_SSL = True
     MAIL_USERNAME = 'oscar.alberigo@gmail.com'
     MAIL_PASSWORD = 'ufvx hcav zmad gsct'
-    MAIL_DEFAULT_SENDER = 'oscar.alberigo@gmail.com'
+    MAIL_DEFAULT_SENDER = ('Coco', 'cocosearchhelp@gmail.com')
 
     DEBUG = False
 
