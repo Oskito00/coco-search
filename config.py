@@ -64,6 +64,12 @@ class Config:
         'client_secret': 'PRD-0e716ac46200-c9d9-400e-b850-2579',
         'token': None,
         'token_expiry': None
+    },
+    {
+        'client_id': 'WilliamB-analysis-PRD-fa71a2178-1826dca4',
+        'client_secret': 'PRD-a71a217857a4-edae-4c72-8d1f-53f2',
+        'token': None,
+        'token_expiry': None
     }
 ]
     
