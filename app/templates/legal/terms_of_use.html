@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+
+{% block title %}Terms of Use | Coco{% endblock %}
+
+{% block styles %}
+{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/legal.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="legal-page">
+  <div class="legal-container">
+    <h1>Terms of Use</h1>
+    <p class="effective-date"><strong>Effective Date:</strong> 14th May 2025</p>
+
+    <h2>1. Who We Are</h2>
+    <p>Coco is operated by a UK-based sole trader</p>
+
+    <h2>2. Service Description</h2>
+    <p>Coco enables users to:</p>
+    <ul>
+        <li>Receive timely alerts related to specific search terms or filters</li>
+        <li>View and interpret analytics based on items or data matching their search criteria</li>
+    </ul>
+    <p>These insights may include frequency of listings, price trends, or other aggregate information derived from third-party sources.</p>
+
+    <h2>3. Account Access</h2>
+    <ul>
+        <li>You are responsible for keeping login details secure.</li>
+        <li>Passwords are stored in hashed format using industry-standard methods.</li>
+        <li>You must promptly notify us of any unauthorised access or suspected breach.</li>
+    </ul>
+
+    <h2>4. Acceptable Use</h2>
+    <ul>
+        <li>You agree not to use the Service for unlawful, harmful, or abusive purposes.</li>
+        <li>You must not scrape, resell, or misrepresent the Service's outputs.</li>
+        <li>You must not tamper with or attempt to reverse-engineer the platform or analytics.</li>
+        <li>You must not provide access to the Service to third parties using your login credentials</li>
+    </ul>
+
+    <h2>5. Availability</h2>
+    <p>We aim to provide continuous access but do not guarantee uptime. Temporary outages may occur due to maintenance, upgrades, or third-party host interruptions (e.g. AWS/Heroku).</p>
+
+    <h2>6. Intellectual Property</h2>
+    <p>All intellectual property in the Coco platform, including its analytics, notifications engine, and software, remains our property. You are granted a limited, non-exclusive license to use the Service under these Terms.</p>
+
+    <h2>7. Fees & Access</h2>
+    <p>Access to Coco is provided on a subscription basis, with fees and billing terms agreed separately. Access may be suspended or revoked for non-payment or violations of these Terms.</p>
+
+    <h2>8. Data and Privacy</h2>
+    <ul>
+        <li>User search terms, email addresses, and metadata are securely stored in a database hosted on AWS.</li>
+        <li>Passwords are securely hashed before storage.</li>
+        <li>We do not sell or share user data with third parties.</li>
+        <li>We may collect usage data to improve analytics and performance.</li>
+    </ul>
+    <p>See our <a href="#">Privacy Policy</a> for full details.</p>
+
+    <h2>9. Termination</h2>
+    <p>Either party may terminate access with notice. Upon termination, access to the Service will be revoked and data may be deleted after a defined retention period unless required by law.</p>
+
+    <h2>10. Disclaimer of Warranties</h2>
+    <p>Coco is provided "as is" without warranty of accuracy, completeness, or fitness for a particular purpose. Analytics and notifications rely on third-party data, which may be incomplete, outdated, or unavailable.</p>
+
+    <h2>11. Limitation of Liability</h2>
+    <p>To the fullest extent permitted by law, Coco is not liable for indirect, incidental, or consequential damages, or for loss of profits, data, or business. Total liability is limited to the subscription fees paid in the 3 months prior to any claim.</p>
+
+    <h2>12. Changes to These Terms</h2>
+    <p>We may occasionally update these Terms. If changes are material, we will provide notice via email or the platform. Continued use after changes constitutes acceptance.</p>
+
+    <div class="contact-info">
+      <h2>13. Contact</h2>
+      Email: cocosearchhelp@gmail.com<br>
+    </div>
+  </div>
+</div>
+{% endblock %}

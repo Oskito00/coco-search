@@ -6,3 +6,4 @@ venv/
 app/tests/test_telegram_notification.py
 *.sql
 *.db
+/app/templates/email_templates/

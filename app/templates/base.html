@@ -8,6 +8,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/components/footer.css') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}">
+    <link rel="icon" type="image/png" sizes="96x96" href="{{ url_for('static', filename='img/favicon-96x96.png') }}">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='img/favicon-96x96.png') }}">
     {% block styles %}{% endblock %}
 </head>
 <body>
@@ -48,16 +51,15 @@
                 <ul>
                     <li><a href="{{ url_for('main.index') }}">Home</a></li>
                     <li><a href="{{ url_for('contact_feedback.contact_feedback') }}">Contact</a></li>
+                    <li><a href="{{ url_for('legal.terms_of_use') }}">Terms of Use</a></li>
+                    <li><a href="{{ url_for('legal.privacy_policy') }}">Privacy Policy</a></li>
                 </ul>
             </div>
             
             <div class="footer-section">
                 <h4>Connect</h4>
                 <div class="social-links">
-                    <a href="#" class="social-icon"><i class="fab fa-twitter"></i></a>
-                    <a href="#" class="social-icon"><i class="fab fa-facebook"></i></a>
-                    <a href="#" class="social-icon"><i class="fab fa-linkedin"></i></a>
-                    <a href="#" class="social-icon"><i class="fab fa-github"></i></a>
+                    <a href="https://twitter.com/cocosearchsupport" class="social-icon"><i class="fab fa-twitter"></i></a>
                 </div>
             </div>
         </div>
