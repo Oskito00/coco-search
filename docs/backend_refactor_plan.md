@@ -20,6 +20,29 @@ This repo is moving toward a backend-first modular structure for an eBay notifie
 4. Expand relevance around explicit interactions: relevant, not relevant, clicked, dismissed, notified, ignored, purchased.
 5. Replace the current heuristic relevance scorer with a trained classifier behind the same service boundary when enough feedback exists.
 
+## Additive schema direction
+
+The compatibility model remains `UserQuery` for the current route, scheduler, and repository code. The next schema increment adds history and event tables around it instead of destructively splitting it:
+
+- `SearchRun` records each scheduled, preview, manual, or recent/full execution attempt.
+- `ItemObservation` records the item/query/search-run snapshot after hard filters and before relevance decisions.
+- `ItemFeatureSnapshot` stores versioned feature dictionaries and relevance decisions for a query/item pair.
+- `UserItemInteraction` stores explicit and implicit labels such as clicked, dismissed, relevant, not relevant, notified, ignored, or purchased.
+- `DomainEvent` provides a durable handoff from search/relevance decisions to downstream processors.
+- `NotificationRecord` audits attempted and completed notification deliveries.
+
+Legacy `required_keywords` and `excluded_keywords` stay on `UserQuery` as hard filters. `ItemRelevanceFeedback`, `Feedback`, `UserQueryItems`, `Keyword`, and `Item` remain available while services move toward learned preference and relevance.
+
+## Deferred saved search split
+
+Do not split `UserQuery` in the current additive pass. Once repositories and route code depend on domain interfaces instead of the legacy model, introduce compatible tables with a backfill migration:
+
+- `saved_searches`: stable search identity, owner, marketplace, active flag, and keyword reference.
+- `search_info`: user-editable filters and display metadata, including hard keyword filters.
+- `search_status`: schedule and execution state such as first run, last full/recent run, and next full run.
+
+The target application contract should continue to expose `SavedSearch`, `SearchFilters`, and `SearchSchedule`, with `saved_search_from_model(user_query)` and `to_ebay_search_params(saved_search)` preserving existing behavior during the transition.
+
 ## Configuration
 
 Committed eBay credentials were removed. Configure eBay access with either:

@@ -8,9 +8,16 @@ from sqlalchemy.dialects.postgresql import NUMERIC, UUID
 from sqlalchemy import JSON, text
 from sqlalchemy.dialects.postgresql import JSONB
 
+JSON_DOCUMENT = JSONB().with_variant(db.JSON(), 'sqlite')
+
+
+class TimestampMixin:
+    """Shared timestamp columns for additive event and history tables."""
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
 
 #For some reason with
-
 class APSchedulerJob(db.Model):
     __tablename__ = 'apscheduler_jobs'
     id = db.Column(db.String(191), primary_key=True)
@@ -147,6 +154,232 @@ class UserQuery(db.Model):
 
     # Relevance average score
     average_relevance_score = db.Column(db.Float, default=0.3)
+
+class SearchRun(TimestampMixin, db.Model):
+    """Execution history for a saved user query."""
+
+    __tablename__ = 'search_runs'
+
+    search_run_id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    query_id = db.Column(
+        UUID(as_uuid=True),
+        db.ForeignKey('user_queries.query_id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
+    run_type = db.Column(db.String(30), nullable=False, default='scheduled')
+    status = db.Column(db.String(30), nullable=False, default='started', index=True)
+    source = db.Column(db.String(50))
+    started_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    finished_at = db.Column(db.DateTime)
+    items_seen = db.Column(db.Integer, default=0, nullable=False)
+    items_created = db.Column(db.Integer, default=0, nullable=False)
+    items_updated = db.Column(db.Integer, default=0, nullable=False)
+    error_message = db.Column(db.Text)
+    metadata_json = db.Column(JSON_DOCUMENT, default=dict, nullable=False)
+
+    user_query = db.relationship('UserQuery', backref='search_runs')
+
+
+class ItemObservation(TimestampMixin, db.Model):
+    """Search-specific snapshot of an item seen during execution."""
+
+    __tablename__ = 'item_observations'
+
+    item_observation_id = db.Column(
+        db.BigInteger,
+        primary_key=True,
+        autoincrement=True
+    )
+    search_run_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey('search_runs.search_run_id', ondelete='SET NULL'),
+        index=True
+    )
+    query_id = db.Column(
+        UUID(as_uuid=True),
+        db.ForeignKey('user_queries.query_id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
+    item_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey('items.item_id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
+    observed_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    price = db.Column(db.Numeric(10, 2))
+    currency = db.Column(db.String(10))
+    current_bid = db.Column(db.Numeric(10, 2))
+    condition = db.Column(db.String(50))
+    buying_options = db.Column(db.String(255))
+    listing_status = db.Column(db.String(50))
+    hard_filter_passed = db.Column(db.Boolean)
+    is_new_item = db.Column(db.Boolean, default=False, nullable=False)
+    raw_item_snapshot = db.Column(JSON_DOCUMENT, default=dict, nullable=False)
+
+    search_run = db.relationship('SearchRun', backref='item_observations')
+    user_query = db.relationship('UserQuery', backref='item_observations')
+    item = db.relationship('Item', backref='observations')
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            'search_run_id',
+            'item_id',
+            name='uq_item_observations_run_item'
+        ),
+    )
+
+
+class UserItemInteraction(TimestampMixin, db.Model):
+    """User feedback or behavior tied to an item and optional query context."""
+
+    __tablename__ = 'user_item_interactions'
+
+    user_item_interaction_id = db.Column(
+        db.BigInteger,
+        primary_key=True,
+        autoincrement=True
+    )
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('users.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
+    query_id = db.Column(
+        UUID(as_uuid=True),
+        db.ForeignKey('user_queries.query_id', ondelete='SET NULL'),
+        index=True
+    )
+    item_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey('items.item_id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
+    interaction_type = db.Column(db.String(40), nullable=False, index=True)
+    label = db.Column(db.String(40))
+    source = db.Column(db.String(50))
+    metadata_json = db.Column(JSON_DOCUMENT, default=dict, nullable=False)
+
+    user = db.relationship('User', backref='item_interactions')
+    user_query = db.relationship('UserQuery', backref='item_interactions')
+    item = db.relationship('Item', backref='user_interactions')
+
+
+class ItemFeatureSnapshot(TimestampMixin, db.Model):
+    """Versioned relevance features extracted for an item/query pair."""
+
+    __tablename__ = 'item_feature_snapshots'
+
+    item_feature_snapshot_id = db.Column(
+        db.BigInteger,
+        primary_key=True,
+        autoincrement=True
+    )
+    query_id = db.Column(
+        UUID(as_uuid=True),
+        db.ForeignKey('user_queries.query_id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
+    item_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey('items.item_id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
+    search_run_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey('search_runs.search_run_id', ondelete='SET NULL'),
+        index=True
+    )
+    feature_version = db.Column(db.String(40), nullable=False, default='v1')
+    model_version = db.Column(db.String(80))
+    features = db.Column(JSON_DOCUMENT, default=dict, nullable=False)
+    relevance_score = db.Column(db.Float)
+    should_notify = db.Column(db.Boolean)
+    decision = db.Column(db.String(40))
+
+    user_query = db.relationship('UserQuery', backref='feature_snapshots')
+    item = db.relationship('Item', backref='feature_snapshots')
+    search_run = db.relationship('SearchRun', backref='feature_snapshots')
+
+
+class DomainEvent(TimestampMixin, db.Model):
+    """Durable domain event for downstream notification processing."""
+
+    __tablename__ = 'domain_events'
+
+    domain_event_id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    event_type = db.Column(db.String(80), nullable=False, index=True)
+    aggregate_type = db.Column(db.String(50), nullable=False)
+    aggregate_id = db.Column(db.String(100), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'))
+    query_id = db.Column(
+        UUID(as_uuid=True),
+        db.ForeignKey('user_queries.query_id', ondelete='SET NULL')
+    )
+    item_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey('items.item_id', ondelete='SET NULL')
+    )
+    status = db.Column(db.String(30), nullable=False, default='pending', index=True)
+    source = db.Column(db.String(50))
+    payload = db.Column(JSON_DOCUMENT, default=dict, nullable=False)
+    occurred_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    processed_at = db.Column(db.DateTime)
+
+    user = db.relationship('User', backref='domain_events')
+    user_query = db.relationship('UserQuery', backref='domain_events')
+    item = db.relationship('Item', backref='domain_events')
+
+
+class NotificationRecord(TimestampMixin, db.Model):
+    """Delivery audit trail for notifications emitted from domain events."""
+
+    __tablename__ = 'notification_records'
+
+    notification_record_id = db.Column(
+        db.BigInteger,
+        primary_key=True,
+        autoincrement=True
+    )
+    domain_event_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey('domain_events.domain_event_id', ondelete='SET NULL'),
+        index=True
+    )
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('users.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
+    query_id = db.Column(
+        UUID(as_uuid=True),
+        db.ForeignKey('user_queries.query_id', ondelete='SET NULL'),
+        index=True
+    )
+    item_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey('items.item_id', ondelete='SET NULL'),
+        index=True
+    )
+    channel = db.Column(db.String(40), nullable=False)
+    notification_type = db.Column(db.String(60), nullable=False)
+    status = db.Column(db.String(30), nullable=False, default='pending', index=True)
+    recipient = db.Column(db.String(255))
+    payload = db.Column(JSON_DOCUMENT, default=dict, nullable=False)
+    error_message = db.Column(db.Text)
+    sent_at = db.Column(db.DateTime)
+
+    domain_event = db.relationship('DomainEvent', backref='notification_records')
+    user = db.relationship('User', backref='notification_records')
+    user_query = db.relationship('UserQuery', backref='notification_records')
+    item = db.relationship('Item', backref='notification_records')
 
 class Keyword(db.Model):
     __tablename__ = 'keywords'
