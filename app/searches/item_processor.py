@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
 
@@ -55,6 +56,13 @@ EVENT_HOOKS = (
 )
 
 
+@dataclass(frozen=True)
+class ItemProcessingOutcome:
+    item: Any
+    is_new_item: bool
+    hard_filter_passed: bool = True
+
+
 class SearchItemProcessor:
     def __init__(
         self,
@@ -83,7 +91,7 @@ class SearchItemProcessor:
 
         for raw_item_data in items:
             item_data = normalize_item_payload(raw_item_data)
-            item = self._upsert_item_for_query(
+            outcome = self._upsert_item_for_query(
                 item_data=item_data,
                 query=query,
                 keyword=keyword,
@@ -92,9 +100,11 @@ class SearchItemProcessor:
                 first_run=first_run,
             )
 
-            if item is not None:
-                self._record_observation(item, item_data, query, current_time)
-                self._track_ending_auction(item, item_data, query, result, current_time)
+            if outcome is not None:
+                self._record_observation(outcome, item_data, query, current_time)
+                self._track_ending_auction(
+                    outcome.item, item_data, query, result, current_time
+                )
 
         try:
             db.session.commit()
@@ -115,7 +125,7 @@ class SearchItemProcessor:
         result: SearchProcessingResult,
         current_time: datetime,
         first_run: bool,
-    ) -> Any | None:
+    ) -> ItemProcessingOutcome | None:
         print(f"[Process Items] Starting item processing for query {query.query_id}")
         ebay_id = item_data.get("ebay_id")
         if not ebay_id:
@@ -147,7 +157,7 @@ class SearchItemProcessor:
         result: SearchProcessingResult,
         current_time: datetime,
         first_run: bool,
-    ) -> Any | None:
+    ) -> ItemProcessingOutcome | None:
         feedback = self.items.get_feedback(
             user_id=query.user_id,
             item_id=item.item_id,
@@ -161,7 +171,8 @@ class SearchItemProcessor:
         link = self.items.link_query(
             query.query_id, item.item_id, created_at=current_time
         )
-        if link and not first_run:
+        is_new_item = link is not None
+        if is_new_item and not first_run:
             self._record_new_item(item, query, result, current_time)
 
         old_price = getattr(item, "price", None)
@@ -193,7 +204,7 @@ class SearchItemProcessor:
                 result,
             )
 
-        return item
+        return ItemProcessingOutcome(item=item, is_new_item=is_new_item)
 
     def _process_new_item(
         self,
@@ -203,7 +214,7 @@ class SearchItemProcessor:
         result: SearchProcessingResult,
         current_time: datetime,
         first_run: bool,
-    ) -> Any:
+    ) -> ItemProcessingOutcome:
         item = self.items.create_item(item_data)
         self.items.link_keyword(keyword.keyword_id, item.item_id, found_at=current_time)
         self.items.link_query(query.query_id, item.item_id, created_at=current_time)
@@ -211,7 +222,7 @@ class SearchItemProcessor:
         if not first_run:
             self._record_new_item(item, query, result, current_time)
 
-        return item
+        return ItemProcessingOutcome(item=item, is_new_item=True)
 
     def _record_new_item(
         self,
@@ -254,28 +265,22 @@ class SearchItemProcessor:
 
     def _record_observation(
         self,
-        item: Any,
+        outcome: ItemProcessingOutcome,
         item_data: dict[str, Any],
         query: Any,
         observed_at: datetime,
     ) -> None:
-        observation = {
-            "user_id": getattr(query, "user_id", None),
-            "search_id": getattr(query, "query_id", None),
-            "item_id": getattr(item, "item_id", None),
-            "ebay_id": item_data.get("ebay_id"),
-            "observed_at": observed_at,
-            "price": item_data.get("price"),
-            "currency": item_data.get("currency"),
-            "payload": item_data,
-        }
-        _call_optional_repository_hook(
-            self.observations, OBSERVATION_HOOKS, observation
+        _persist_observation(
+            self.observations,
+            outcome,
+            item_data,
+            query,
+            observed_at,
         )
 
     def _record_event(self, event: DomainEvent, result: SearchProcessingResult) -> None:
         result.domain_events.append(event)
-        _call_optional_repository_hook(self.events, EVENT_HOOKS, event)
+        _persist_domain_event(self.events, event)
 
 
 def _diff_item(item: Any, item_data: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -294,6 +299,80 @@ def _price_drop_values(old_price: Any, new_price: Any) -> tuple[float, float] | 
     if old_price is None or new_price is None or new_price >= old_price:
         return None
     return float(old_price), float(new_price)
+
+
+def _persist_domain_event(repository: Any, event: DomainEvent) -> Any | None:
+    create = getattr(repository, "create", None)
+    if callable(create):
+        return create(
+            event_type=event.event_type,
+            aggregate_type="item",
+            aggregate_id=event.item_id or event.ebay_id,
+            user_id=event.user_id,
+            query_id=event.search_id,
+            item_id=event.item_id,
+            payload=_serialize_for_persistence(event.payload),
+            status="pending",
+            source="search_item_processor",
+            occurred_at=event.occurred_at,
+        )
+    return _call_optional_repository_hook(repository, EVENT_HOOKS, event)
+
+
+def _persist_observation(
+    repository: Any,
+    outcome: ItemProcessingOutcome,
+    item_data: dict[str, Any],
+    query: Any,
+    observed_at: datetime,
+) -> Any | None:
+    observation = _observation_payload(outcome, item_data, query, observed_at)
+    create = getattr(repository, "create", None)
+    if callable(create):
+        return create(**observation)
+    return _call_optional_repository_hook(repository, OBSERVATION_HOOKS, observation)
+
+
+def _observation_payload(
+    outcome: ItemProcessingOutcome,
+    item_data: dict[str, Any],
+    query: Any,
+    observed_at: datetime,
+) -> dict[str, Any]:
+    return {
+        "item_id": getattr(outcome.item, "item_id", None),
+        "query_id": getattr(query, "query_id", None),
+        "search_run_id": _search_run_id(query, item_data),
+        "observed_at": observed_at,
+        "price": item_data.get("price"),
+        "currency": item_data.get("currency"),
+        "current_bid": item_data.get("current_bid"),
+        "condition": item_data.get("condition"),
+        "buying_options": item_data.get("buying_options"),
+        "raw_item_snapshot": _serialize_for_persistence(item_data),
+        "is_new_item": outcome.is_new_item,
+        "hard_filter_passed": outcome.hard_filter_passed,
+    }
+
+
+def _search_run_id(query: Any, item_data: dict[str, Any]) -> Any:
+    return (
+        item_data.get("search_run_id")
+        or getattr(query, "search_run_id", None)
+        or getattr(query, "current_search_run_id", None)
+    )
+
+
+def _serialize_for_persistence(value: Any) -> Any:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {key: _serialize_for_persistence(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_serialize_for_persistence(item) for item in value]
+    if isinstance(value, tuple):
+        return [_serialize_for_persistence(item) for item in value]
+    return value
 
 
 def _call_optional_repository_hook(

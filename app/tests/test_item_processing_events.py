@@ -101,6 +101,15 @@ class FakeNotifications:
         self.calls.append((query, result))
 
 
+class FakeCreateRepository:
+    def __init__(self) -> None:
+        self.created: list[dict[str, Any]] = []
+
+    def create(self, **kwargs: Any) -> dict[str, Any]:
+        self.created.append(kwargs)
+        return kwargs
+
+
 def test_processor_normalizes_raw_sdk_payload_and_records_new_item_event(
     monkeypatch: Any,
 ) -> None:
@@ -137,6 +146,94 @@ def test_processor_normalizes_raw_sdk_payload_and_records_new_item_event(
     assert repository.events == result.domain_events
     assert repository.observations[0]["price"] == 129.95
     assert session.committed is True
+
+
+def test_processor_persists_domain_events_with_schema_fields(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setattr(item_processor.db, "session", FakeSession())
+    item_repository = FakeRepository()
+    event_repository = FakeCreateRepository()
+    query = _query()
+    end_time = datetime.now(timezone.utc) + timedelta(hours=1)
+    existing = SimpleNamespace(item_id=42, ebay_id="abc", price=100.0)
+    item_repository.items_by_ebay_id["abc"] = existing
+    item_repository.query_links[(query.query_id, existing.item_id)] = SimpleNamespace(
+        auction_ending_notification_sent=False
+    )
+
+    result = SearchItemProcessor(
+        item_repository=item_repository,
+        event_repository=event_repository,
+        notification_service=FakeNotifications(),
+    ).process(
+        [{"ebay_id": "abc", "price": 75.0, "end_time": end_time}],
+        query,
+        notify=False,
+    )
+
+    assert [event.event_type for event in result.domain_events] == [
+        ITEM_UPDATED,
+        PRICE_DROPPED,
+        AUCTION_ENDING_SOON,
+    ]
+    price_drop = event_repository.created[1]
+    assert price_drop == {
+        "event_type": PRICE_DROPPED,
+        "aggregate_type": "item",
+        "aggregate_id": existing.item_id,
+        "user_id": query.user_id,
+        "query_id": query.query_id,
+        "item_id": existing.item_id,
+        "payload": {"old_price": 100.0, "new_price": 75.0},
+        "status": "pending",
+        "source": "search_item_processor",
+        "occurred_at": result.domain_events[1].occurred_at,
+    }
+    assert event_repository.created[2]["payload"] == {"end_time": end_time.isoformat()}
+
+
+def test_processor_persists_observations_with_schema_fields(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setattr(item_processor.db, "session", FakeSession())
+    item_repository = FakeRepository()
+    observation_repository = FakeCreateRepository()
+    query = _query(search_run_id="run-1")
+    end_time = datetime.now(timezone.utc) + timedelta(days=1)
+
+    SearchItemProcessor(
+        item_repository=item_repository,
+        observation_repository=observation_repository,
+        notification_service=FakeNotifications(),
+    ).process(
+        [
+            {
+                "ebay_id": "abc",
+                "price": 50.0,
+                "currency": "GBP",
+                "current_bid": 25.0,
+                "condition": "USED",
+                "buying_options": '["AUCTION"]',
+                "end_time": end_time,
+            }
+        ],
+        query,
+        notify=False,
+    )
+
+    observation = observation_repository.created[0]
+    assert observation["item_id"] == item_repository.items_by_ebay_id["abc"].item_id
+    assert observation["query_id"] == query.query_id
+    assert observation["search_run_id"] == "run-1"
+    assert observation["price"] == 50.0
+    assert observation["currency"] == "GBP"
+    assert observation["current_bid"] == 25.0
+    assert observation["condition"] == "USED"
+    assert observation["buying_options"] == '["AUCTION"]'
+    assert observation["raw_item_snapshot"]["end_time"] == end_time.isoformat()
+    assert observation["is_new_item"] is True
+    assert observation["hard_filter_passed"] is True
 
 
 def test_processor_records_update_and_price_drop_events(monkeypatch: Any) -> None:
@@ -220,9 +317,12 @@ def test_legacy_process_items_return_shape_is_preserved(monkeypatch: Any) -> Non
     assert process_items([], _query()) == (["new"], ["updated"])
 
 
-def _query() -> Any:
-    return SimpleNamespace(
+def _query(search_run_id: str | None = None) -> Any:
+    query = SimpleNamespace(
         query_id="search-1",
         user_id=100,
         keyword=SimpleNamespace(keyword_id=200, keyword_text="pokemon"),
     )
+    if search_run_id is not None:
+        query.search_run_id = search_run_id
+    return query
