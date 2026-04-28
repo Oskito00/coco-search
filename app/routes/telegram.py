@@ -5,7 +5,7 @@ from app.models import User
 from flask_login import current_user, login_required
 from sqlalchemy import cast, String
 
-from app.utils.notifications import NotificationManager
+from app.notifications.telegram import NotificationManager
 
 bp = Blueprint('telegram', __name__, url_prefix='/telegram')
 @bp.route('/connect', methods=['GET', 'POST'])

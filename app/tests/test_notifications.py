@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from pytest import Item
 from app.models import Query, User
 from app.tests.conftest import db_session
-from app.utils.notifications import NotificationManager
+from app.notifications.telegram import NotificationManager
 
 
 def test_new_item_notification():

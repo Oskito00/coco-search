@@ -82,12 +82,12 @@ def setup_teardown(app):
 
 def track_api_calls(monkeypatch):
     """Monkeypatch to track API calls and rate limits"""
-    from app.utils.scraper import scrape_ebay  # Import your actual function
+    from app.searches.execution import scrape_ebay  # Import your actual function
 
     def wrapper(*args, **kwargs):
         with test_stats['lock']:
             test_stats['api_calls_made'] += 1
-        
+
         try:
             return scrape_ebay(*args, **kwargs)
         except Exception as e:
@@ -96,7 +96,7 @@ def track_api_calls(monkeypatch):
                     test_stats['rate_limit_hits'] += 1
             raise
 
-    monkeypatch.setattr('app.utils.scraper.scrape_ebay', wrapper)
+    monkeypatch.setattr('app.searches.execution.scrape_ebay', wrapper)
 
 
 @pytest.mark.load_test
