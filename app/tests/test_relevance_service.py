@@ -1,8 +1,12 @@
 from dataclasses import dataclass
 from decimal import Decimal
+from types import SimpleNamespace
 from typing import Any
 
 from app.relevance import RelevanceService
+from app.relevance.domain import RelevanceInteraction
+from app.relevance.repository import SqlAlchemyRelevanceRepository
+import app.relevance.repository as relevance_repository
 
 
 @dataclass(frozen=True)
@@ -158,6 +162,87 @@ def test_relevance_service_records_interactions_through_repository() -> None:
     assert repository.recorded_interactions[0]["label"] == "relevant"
 
 
+def test_non_bool_onboarding_label_persists_through_interaction_repository() -> None:
+    interaction_repository = FakeInteractionRepository()
+    repository = SqlAlchemyRelevanceRepository(
+        session=FakeSession(),
+        interaction_repository=interaction_repository,
+    )
+
+    result = repository.record_interaction(
+        user_id=1,
+        search_id="search-1",
+        item_id="item-1",
+        interaction_type="onboarding_label",
+        label="maybe",
+        source="preview",
+    )
+
+    assert isinstance(result, RelevanceInteraction)
+    assert result.persisted is True
+    assert interaction_repository.recorded_payloads == [
+        {
+            "user_id": 1,
+            "query_id": "search-1",
+            "item_id": "item-1",
+            "interaction_type": "onboarding_label",
+            "label": "maybe",
+            "source": "preview",
+            "metadata_json": {"search_id": "search-1"},
+        }
+    ]
+
+
+def test_legacy_feedback_fallback_still_persists_bool_label(monkeypatch) -> None:
+    session = FakeSession()
+    query = SimpleNamespace(
+        keyword_id=10,
+        required_keywords="charizard",
+        excluded_keywords="proxy",
+    )
+    feedback_lookup = FakeLookup(result=None)
+    monkeypatch.setattr(
+        relevance_repository,
+        "UserQuery",
+        SimpleNamespace(query=FakeLookup(result=query)),
+    )
+    monkeypatch.setattr(
+        relevance_repository,
+        "ItemRelevanceFeedback",
+        FakeFeedbackModel(feedback_lookup),
+    )
+
+    repository = SqlAlchemyRelevanceRepository(session=session)
+
+    result = repository.record_interaction(
+        user_id=1,
+        search_id="search-1",
+        item_id="item-1",
+        interaction_type="onboarding_label",
+        label="relevant",
+        source="preview",
+    )
+
+    assert isinstance(result, RelevanceInteraction)
+    assert result.persisted is True
+    assert session.flush_count == 1
+    assert len(session.added) == 1
+    assert session.added[0].is_relevant is True
+    assert session.added[0].required_keywords == "charizard"
+    assert session.added[0].excluded_keywords == "proxy"
+
+
+def test_should_notify_behavior_is_unchanged_by_interaction_support() -> None:
+    service = RelevanceService(repository=FakeRepository(Feedback(is_relevant=False)))
+    saved_search = _saved_search()
+    item = _item(title="Pokemon Charizard Holo")
+
+    decision = service.should_notify(user_id=1, saved_search=saved_search, item=item)
+
+    assert decision.should_notify is False
+    assert decision.reasons == ("user_marked_irrelevant",)
+
+
 def _saved_search(
     required_keywords: str | None = None,
     excluded_keywords: str | None = None,
@@ -189,3 +274,52 @@ def _item(title: str, price: str = "100") -> dict[str, Any]:
         "location": {"country": "GB"},
         "buying_options": "FIXED_PRICE",
     }
+
+
+class FakeInteractionRepository:
+    def __init__(self) -> None:
+        self.recorded_payloads: list[dict[str, Any]] = []
+
+    def values(self, **payload: Any) -> dict[str, Any]:
+        return payload
+
+    def add(self, payload: dict[str, Any]) -> object:
+        self.recorded_payloads.append(payload)
+        return payload
+
+    def record_interaction(self, **payload: Any) -> object:
+        self.recorded_payloads.append(payload)
+        return payload
+
+
+class FakeSession:
+    def __init__(self) -> None:
+        self.added: list[Any] = []
+        self.flush_count = 0
+
+    def add(self, value: Any) -> None:
+        self.added.append(value)
+
+    def flush(self) -> None:
+        self.flush_count += 1
+
+
+class FakeLookup:
+    def __init__(self, result: Any) -> None:
+        self.result = result
+        self.filters: dict[str, Any] | None = None
+
+    def filter_by(self, **filters: Any) -> "FakeLookup":
+        self.filters = filters
+        return self
+
+    def one_or_none(self) -> Any:
+        return self.result
+
+
+class FakeFeedbackModel:
+    def __init__(self, query: FakeLookup) -> None:
+        self.query = query
+
+    def __call__(self, **kwargs: Any) -> Any:
+        return SimpleNamespace(**kwargs)
