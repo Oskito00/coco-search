@@ -41,7 +41,7 @@ class NotificationSender:
 
     def __init__(self, manager: Any | None = None) -> None:
         if manager is None:
-            from app.utils.notifications import NotificationManager
+            from app.notifications.telegram import NotificationManager
 
             manager = NotificationManager
         self.manager = manager

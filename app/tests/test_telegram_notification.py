@@ -1,6 +1,6 @@
 from app import create_app
 from app.models import User, Item
-from app.utils.notifications import NotificationManager
+from app.notifications.telegram import NotificationManager
 
 # Create app with proper config FIRST
 app = create_app('default')

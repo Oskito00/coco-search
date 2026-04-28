@@ -68,7 +68,7 @@ def test_telegram_notification(app, session):
 
         # Mock scraper and Telegram
         with patch('app.jobs.query_jobs.scrape_ebay') as mock_scrape, \
-             patch('app.utils.notifications.TelegramNotifier.send_message') as mock_send:
+             patch('app.notifications.telegram.TelegramNotifier.send_message') as mock_send:
 
             mock_scrape.return_value = [{
                 'ebay_id': 'TG123',
@@ -113,7 +113,7 @@ def test_telegram_notification_flow(app, session):
 
         # Mock services
         with patch('app.jobs.query_jobs.scrape_ebay') as mock_scrape, \
-             patch('app.utils.notifications.TelegramNotifier') as mock_telegram:
+             patch('app.notifications.telegram.TelegramNotifier') as mock_telegram:
 
             # First run - save item (no notification)
             mock_scrape.return_value = [{
