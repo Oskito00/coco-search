@@ -64,10 +64,6 @@ def connection_status():
         'connected': bool(user.telegram_chat_ids.get('main'))
     })
 
-@bp.route('/guide')
-def setup_guide():
-    return render_template('telegram/guide.html')
-
 @bp.route('/update-chat-id', methods=['POST'])
 @login_required
 def update_chat_id():
