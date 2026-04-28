@@ -1,14 +1,20 @@
 import logging
 import time
+from collections.abc import Callable, Mapping
+from typing import Any
 
-import requests
+import requests  # type: ignore[import-untyped]
 
-from ebay_client.browse.dto import SearchFilters, SearchRequest
 from ebay_client.browse.filters import SearchFilterBuilder
+from ebay_client.browse.headers import build_browse_headers
+from ebay_client.browse.pagination import collect_search_items
 from ebay_client.browse.parsers import parse_item_summary_response
-from ebay_client.browse.responses import dedupe_items
+from ebay_client.browse.search_requests import (
+    build_search_params,
+    create_search_request,
+)
+from ebay_client.browse.transport import fetch_json_with_retry
 from ebay_client.marketplaces import get_marketplace
-
 
 logger = logging.getLogger(__name__)
 
@@ -19,20 +25,37 @@ class EbayBrowseClient:
     token_url = "https://api.ebay.com/identity/v1/oauth2/token"
     base_url = "https://api.ebay.com/buy/browse/v1"
 
-    def __init__(self, token_provider, marketplace="EBAY_GB", session=None):
+    def __init__(
+        self,
+        token_provider: Any,
+        marketplace: str = "EBAY_GB",
+        session: requests.Session | None = None,
+        sleeper: Callable[[float], None] = time.sleep,
+        rate_limit_retries: int = 3,
+    ) -> None:
         self.token_provider = token_provider
         self.marketplace = marketplace
         self.session = session or requests.Session()
+        self.sleeper = sleeper
+        self.rate_limit_retries = rate_limit_retries
+
+        self._configure_session(self.session)
+        self._set_marketplace_config(marketplace)
+
+    @staticmethod
+    def _configure_session(session: requests.Session) -> None:
+        """Apply connection pooling to real requests sessions."""
+        if not hasattr(session, "mount"):
+            return
 
         adapter = requests.adapters.HTTPAdapter(
             pool_connections=30,
             pool_maxsize=200,
             max_retries=3,
         )
-        self.session.mount("https://", adapter)
-        self._set_marketplace_config(marketplace)
+        session.mount("https://", adapter)
 
-    def _set_marketplace_config(self, marketplace):
+    def _set_marketplace_config(self, marketplace: str) -> None:
         self.marketplace = marketplace
         self.marketplace_config = get_marketplace(marketplace)
         self.country_code = self.marketplace_config.location
@@ -42,102 +65,74 @@ class EbayBrowseClient:
         self,
         keywords,
         filters=None,
-        limit=200,
-        offset=0,
-        sort_order=None,
-        marketplace=None,
-    ):
+        limit: int = 200,
+        offset: int = 0,
+        sort_order: str | None = None,
+        marketplace: str | None = None,
+    ) -> dict[str, Any]:
         if marketplace:
             self._set_marketplace_config(marketplace)
 
-        request = SearchRequest(
+        request = create_search_request(
             keywords=keywords,
-            filters=SearchFilters.from_mapping(filters),
+            filters=filters,
             limit=limit,
             offset=offset,
             sort_order=sort_order,
         )
-        token = self.token_provider.get_token()
-        marketplace_header = self.marketplace.replace("_", "-")
-
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "X-EBAY-C-MARKETPLACE-ID": marketplace_header,
-            "X-EBAY-C-CURRENCY": self.currency,
-            "Content-Language": self.marketplace_config.language,
-            "Accept-Language": self.marketplace_config.language,
-            "Content-Type": "application/json",
-        }
-        params = {
-            "q": request.keywords,
-            "limit": request.limit,
-            "offset": request.offset,
-        }
-
-        if request.sort_order:
-            params["sort"] = request.sort_order
-
-        filter_value = self.build_filter(request.filters)
-        if filter_value:
-            params["filter"] = filter_value
-
-        response = self.session.get(
-            f"{self.base_url}/item_summary/search",
+        headers = self._build_headers()
+        params = build_search_params(request, self.build_filter(request.filters))
+        return fetch_json_with_retry(
+            session=self.session,
+            url=self._search_url(),
             headers=headers,
             params=params,
+            max_retries=self.rate_limit_retries,
+            sleeper=self.sleeper,
         )
 
-        if response.status_code == 429:
-            sleep_time = int(response.headers.get("Retry-After", 60))
-            time.sleep(sleep_time)
-            return self.search_item_summaries(
-                keywords,
-                filters,
-                limit,
-                offset,
-                sort_order,
-                marketplace,
-            )
+    def _build_headers(self) -> dict[str, str]:
+        """Build authenticated headers for the current marketplace."""
+        return build_browse_headers(
+            token=self.token_provider.get_token(),
+            marketplace=self.marketplace,
+            currency=self.currency,
+            language=self.marketplace_config.language,
+        )
 
-        response.raise_for_status()
-        return response.json()
+    def _search_url(self) -> str:
+        """Return the Browse item summary search URL."""
+        return f"{self.base_url}/item_summary/search"
 
     def search_items(
         self,
         keywords,
         filters=None,
-        sort_order=None,
-        max_pages=1,
-        marketplace=None,
-    ):
+        sort_order: str | None = None,
+        max_pages: int | None = 1,
+        marketplace: str | None = None,
+    ) -> list[dict[str, Any]]:
         if marketplace:
             self._set_marketplace_config(marketplace)
 
-        returned_items = []
-        pages_searched = 0
-        offset = 0
-
-        while max_pages is None or pages_searched < max_pages:
-            time.sleep(1)
-            raw_response = self.search_item_summaries(
+        return collect_search_items(
+            fetch_page=lambda offset, limit: self.search_item_summaries(
                 keywords=keywords,
                 filters=filters,
-                limit=200,
+                limit=limit,
                 offset=offset,
                 sort_order=sort_order,
-            )
-            parsed_items = self.parse_item_summary_response(raw_response)
-            returned_items.extend(parsed_items)
+            ),
+            parse_page=self.parse_item_summary_response,
+            max_pages=max_pages,
+            sleeper=self.sleeper,
+        )
 
-            offset += len(parsed_items)
-            pages_searched += 1
-            if len(parsed_items) < 200:
-                break
-
-        return dedupe_items(returned_items)
-
-    def build_filter(self, filters):
+    def build_filter(self, filters) -> str:
         return SearchFilterBuilder(self.currency).build(filters)
 
-    def parse_item_summary_response(self, response):
+    def parse_item_summary_response(
+        self,
+        response: Mapping[str, Any],
+    ) -> list[dict[str, Any]]:
         return parse_item_summary_response(response, default_currency=self.currency)
