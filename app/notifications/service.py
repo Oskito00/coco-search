@@ -56,8 +56,12 @@ class EventNotificationService:
                 continue
 
             rendered = self.renderer.render(event, payloads)
-            self.records.create_records(user, event, payloads)
-            self.sender.send(user, rendered)
+            records = self.records.create_records(user, event, payloads)
+            sent = self.sender.send(user, rendered)
+            if sent:
+                self.records.mark_sent(records)
+            else:
+                self.records.mark_failed(records)
             counts[event.notification_type] += len(payloads)
 
         return counts

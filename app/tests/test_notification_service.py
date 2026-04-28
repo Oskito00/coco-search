@@ -35,18 +35,28 @@ class RelevanceServiceStub:
 class NotificationRepositoryStub:
     def __init__(self) -> None:
         self.records: list[dict[str, Any]] = []
+        self.sent: list[dict[str, Any]] = []
+        self.failed: list[dict[str, Any]] = []
 
-    def create_notification(self, **kwargs: Any) -> None:
+    def create(self, **kwargs: Any) -> dict[str, Any]:
         self.records.append(kwargs)
+        return kwargs
+
+    def mark_sent(self, record: dict[str, Any]) -> None:
+        self.sent.append(record)
+
+    def mark_failed(self, record: dict[str, Any]) -> None:
+        self.failed.append(record)
 
 
 class SenderStub(NotificationSender):
-    def __init__(self) -> None:
+    def __init__(self, sent: bool = True) -> None:
+        self.delivery_result = sent
         self.sent: list[tuple[Any, RenderedNotification]] = []
 
     def send(self, user: Any, notification: RenderedNotification) -> bool:
         self.sent.append((user, notification))
-        return True
+        return self.delivery_result
 
 
 def test_notify_search_events_filters_by_relevance_and_records_notifications() -> None:
@@ -77,13 +87,20 @@ def test_notify_search_events_filters_by_relevance_and_records_notifications() -
     assert sender.sent[0][1].payloads == [first_item]
     assert records.records == [
         {
-            "user_id": user.id,
-            "search_id": query.query_id,
-            "item_id": first_item.item_id,
-            "notification_type": "new_items",
-            "metadata": {},
+            "query_id": query.query_id,
+            "payload": {
+                "user_id": user.id,
+                "notification_type": "new_items",
+                "query_text": "sony camera",
+                "item_id": first_item.item_id,
+                "metadata": {},
+            },
+            "channel": "telegram",
+            "status": "pending",
         }
     ]
+    assert records.sent == records.records
+    assert records.failed == []
 
 
 def test_notify_search_events_respects_disabled_preferences() -> None:
@@ -136,6 +153,28 @@ def test_notify_search_events_preserves_legacy_event_buckets() -> None:
     ]
     assert sender.sent[1][1].payloads == result.price_drops
     assert sender.sent[2][1].payloads == result.ending_auctions
+
+
+def test_notify_search_events_marks_records_failed_when_delivery_fails() -> None:
+    user = _user(preferences={"new_items": True})
+    query = _query(user_id=user.id)
+    item = ItemStub(item_id=1, title="undelivered item")
+    result = SimpleNamespace(
+        new_items=[item],
+        price_drops=[],
+        ending_auctions=[],
+    )
+    records = NotificationRepositoryStub()
+
+    counts = EventNotificationService(
+        user_repository=UserRepositoryStub(user),
+        notification_repository=records,
+        sender=SenderStub(sent=False),
+    ).notify_search_events(query, result)
+
+    assert counts == {"new_items": 1, "price_drops": 0, "auction_alerts": 0}
+    assert records.sent == []
+    assert records.failed == records.records
 
 
 def _user(preferences: dict[str, bool]) -> Any:
