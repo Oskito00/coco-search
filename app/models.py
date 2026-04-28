@@ -2,7 +2,6 @@ from datetime import datetime, timezone
 import os
 import uuid
 from app.extensions import db
-from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy.dialects.postgresql import NUMERIC, UUID
 from sqlalchemy import JSON, text
@@ -26,7 +25,7 @@ class APSchedulerJob(db.Model):
     next_run_time = db.Column(db.Float)
     job_state = db.Column(db.LargeBinary)
 
-class User(UserMixin, db.Model):
+class User(db.Model):
     __tablename__ = 'users'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -79,6 +78,30 @@ class User(UserMixin, db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
     
+class ApiToken(db.Model):
+    """Bearer tokens for API access. Stores SHA-256 hash, never the raw token."""
+
+    __tablename__ = 'api_tokens'
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('users.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    name = db.Column(db.String(80), nullable=False)
+    token_prefix = db.Column(db.String(12), nullable=False, index=True)
+    token_hash = db.Column(db.String(64), nullable=False, unique=True, index=True)
+    scopes = db.Column(JSON_DOCUMENT, default=list, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    last_used_at = db.Column(db.DateTime)
+    expires_at = db.Column(db.DateTime)
+    revoked_at = db.Column(db.DateTime)
+
+    user = db.relationship('User', backref='api_tokens')
+
+
 class Item(db.Model):
     __tablename__ = 'items'
     item_id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)

@@ -1,248 +1,114 @@
+"""Application configuration. JSON-API + RQ workers — no APScheduler / WTF."""
+
+from __future__ import annotations
+
 import os
+
 from dotenv import load_dotenv
-import logging
-from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-from sqlalchemy import create_engine
+
 from ebay_client.config import load_ebay_credentials
 
-load_dotenv(override=True)  # Load .env file
+load_dotenv(override=True)
 
-project_root = os.path.abspath(os.path.dirname(__file__))
 
 class Config:
-    # Load from environment first
-    ENV = os.environ.get('APP_ENV', 'production')
-    DEBUG = os.environ.get('FLASK_DEBUG', '0') == '1'
-    
-    SECRET_KEY = os.getenv('SECRET_KEY')
-    ENCRYPTION_KEY = os.getenv('ENCRYPTION_KEY')
-
-    TIMEZONE = os.getenv('TIMEZONE', 'Europe/London')
-
-    TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-
-    EBAY_ENV = os.getenv('EBAY_ENV', 'sandbox')
-    EBAY_API_URL = os.getenv('EBAY_API_URL')
-    EBAY_CLIENT_ID = os.getenv('EBAY_CLIENT_ID')
-    EBAY_CLIENT_SECRET = os.getenv('EBAY_CLIENT_SECRET')
-    EBAY_ACCESS_TOKEN = os.getenv('EBAY_ACCESS_TOKEN')
-
-    WTF_CSRF_ENABLED = True
-    WTF_CSRF_SECRET_KEY = os.getenv('CSRF_SECRET_KEY')
-    WTF_CSRF_TIME_LIMIT = 3600  # 1 hour
-    
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
-    LOG_LEVEL = 'INFO'
+    ENV = os.environ.get("APP_ENV", "production")
+    DEBUG = os.environ.get("FLASK_DEBUG", "0") == "1"
     TESTING = False
+    LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 
+    SECRET_KEY = os.environ.get("SECRET_KEY")
+    ENCRYPTION_KEY = os.environ.get("ENCRYPTION_KEY")
+    SECURITY_PASSWORD_SALT = os.environ.get("SECURITY_PASSWORD_SALT")
+
+    TIMEZONE = os.environ.get("TIMEZONE", "Europe/London")
+
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_size": int(os.environ.get("DB_POOL_SIZE", 10)),
+        "max_overflow": int(os.environ.get("DB_POOL_OVERFLOW", 20)),
+        "pool_timeout": int(os.environ.get("DB_POOL_TIMEOUT", 30)),
+        "pool_recycle": int(os.environ.get("DB_POOL_RECYCLE", 1800)),
+        "pool_pre_ping": True,
+    }
+
+    REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+    PUBLIC_APP_URL = os.environ.get("PUBLIC_APP_URL", "http://localhost:3000")
+
+    # Mail
+    MAIL_SERVER = os.environ.get("MAIL_SERVER", "smtp.gmail.com")
+    MAIL_PORT = int(os.environ.get("MAIL_PORT", 465))
+    MAIL_USE_SSL = os.environ.get("MAIL_USE_SSL", "1") == "1"
+    MAIL_USE_TLS = os.environ.get("MAIL_USE_TLS", "0") == "1"
+    MAIL_USERNAME = os.environ.get("MAIL_USERNAME")
+    MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
+    MAIL_DEFAULT_SENDER = ("Coco", os.environ.get("MAIL_FROM", "cocosearchhelp@gmail.com"))
+
+    # Stripe
+    STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY")
+    STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY")
+    STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET")
+    STRIPE_PRICE_INDIVIDUAL = os.environ.get("STRIPE_PRICE_INDIVIDUAL")
+    STRIPE_PRICE_BUSINESS = os.environ.get("STRIPE_PRICE_BUSINESS")
+    STRIPE_PRICE_PRO = os.environ.get("STRIPE_PRICE_PRO")
+
+    # Telegram
+    TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+
+    # eBay
+    EBAY_ENV = os.environ.get("EBAY_ENV", "sandbox")
+    EBAY_API_URL = os.environ.get("EBAY_API_URL")
+    EBAY_CLIENT_ID = os.environ.get("EBAY_CLIENT_ID")
+    EBAY_CLIENT_SECRET = os.environ.get("EBAY_CLIENT_SECRET")
+    EBAY_ACCESS_TOKEN = os.environ.get("EBAY_ACCESS_TOKEN")
     EBAY_CREDENTIALS = load_ebay_credentials()
-    
-    #Gmail authentication
-    SECURITY_PASSWORD_SALT = os.getenv('SECURITY_PASSWORD_SALT')
+
+    IS_BETA = os.environ.get("IS_BETA", "0") == "1"
 
     @classmethod
-    def verify(cls):
-        required = {
-            'ENCRYPTION_KEY': cls.ENCRYPTION_KEY
-        }
-        
+    def verify(cls) -> None:
+        required = {"ENCRYPTION_KEY": cls.ENCRYPTION_KEY, "SECRET_KEY": cls.SECRET_KEY}
         missing = [k for k, v in required.items() if not v]
         if missing:
             raise RuntimeError(f"Missing required config values: {missing}")
 
-        if cls.DEBUG and cls.FLASK_ENV == 'production':
-            raise ValueError("DEBUG mode should never be enabled in production")
-
-    @classmethod
-    def get(cls, key, default=None):
-        return getattr(cls, key, default)
-
-class TestingConfig(Config):
-    ENV = 'testing'
-    TESTING = True
-    DEBUG = False
-    SQLALCHEMY_DATABASE_URI = "postgresql:///ebay_checker_test" 
-
-    # Scheduler
-    SCHEDULER_JOBSTORES = {
-        'default': {
-            'type': 'sqlalchemy',
-            'url': SQLALCHEMY_DATABASE_URI  # Use your existing database URI
-        }
-    }
-    SCHEDULER_EXECUTORS = {'default': {'type': 'threadpool', 'max_workers': 50}}
-    SCHEDULER_COALESCE = True
-    SCHEDULER_JOB_DEFAULTS = {
-        'coalesce': False,           # Process all missed job runs
-        'max_instances': 10,         # Allow multiple instances of the same job
-        'misfire_grace_time': 3600   # 1 hour grace time for missed jobs
-    }
-
-    # Improved database connection pool settings
-    SQLALCHEMY_ENGINE_OPTIONS = {
-        'pool_size': 20,             # Increase from current 10
-        'max_overflow': 30,          # Increase from current 20
-        'pool_timeout': 30,          # Increase from current 10
-        'pool_recycle': 1800,        # 30 minutes instead of 5 minutes
-        'pool_pre_ping': True        # Keep this setting
-    }
-
-    #Mail configs
-    MAIL_DEFAULT_SENDER = ('Coco', 'cocosearchhelp@gmail.com')
-    MAIL_SERVER = 'smtp.googlemail.com'
-    MAIL_PORT = 465
-    MAIL_USE_TLS = False
-    MAIL_USE_SSL = True
-    MAIL_USERNAME = os.getenv('MAIL_USERNAME')
-    MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
-
-    #Stripe
-    STRIPE_PRICE_INDIVIDUAL = os.getenv('STRIPE_PRICE_INDIVIDUAL')
-    STRIPE_PRICE_BUSINESS = os.getenv('STRIPE_PRICE_BUSINESS')
-    STRIPE_PRICE_PRO = os.getenv('STRIPE_PRICE_PRO')
-    STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')
-    STRIPE_PUBLISHABLE_KEY = os.getenv('STRIPE_PUBLISHABLE_KEY')
-    STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')
-
-    SQLALCHEMY_ECHO = False
-    FORCE_HTTPS = False
-
-    # Read IS_BETA from the environment variable
-    IS_BETA = False
 
 class DevelopmentConfig(Config):
-    ENV = 'development'
+    ENV = "development"
     DEBUG = True
-    FLASK_ENV = 'development'
-    SQLALCHEMY_DATABASE_URI = "postgresql:///ebay_checker" 
+    SQLALCHEMY_DATABASE_URI = os.environ.get(
+        "DATABASE_URL", "postgresql:///ebay_checker"
+    )
 
-    # Scheduler
-    SCHEDULER_JOBSTORES = {
-        'default': {
-            'type': 'sqlalchemy',
-            'url': SQLALCHEMY_DATABASE_URI  # Use your existing database URI
-        }
-    }
-    SCHEDULER_EXECUTORS = {'default': {'type': 'threadpool', 'max_workers': 50}}
-    SCHEDULER_COALESCE = True
-    SCHEDULER_JOB_DEFAULTS = {
-        'coalesce': False,           # Process all missed job runs
-        'max_instances': 10,         # Allow multiple instances of the same job
-        'misfire_grace_time': 3600   # 1 hour grace time for missed jobs
-    }
 
-    # Improved database connection pool settings
-    SQLALCHEMY_ENGINE_OPTIONS = {
-        'pool_size': 20,             # Increase from current 10
-        'max_overflow': 30,          # Increase from current 20
-        'pool_timeout': 30,          # Increase from current 10
-        'pool_recycle': 1800,        # 30 minutes instead of 5 minutes
-        'pool_pre_ping': True        # Keep this setting
-    }
+class TestingConfig(Config):
+    ENV = "testing"
+    TESTING = True
+    DEBUG = False
+    SQLALCHEMY_DATABASE_URI = os.environ.get(
+        "TEST_DATABASE_URL", "postgresql:///ebay_checker_test"
+    )
 
-    #Mail configs
-    MAIL_DEFAULT_SENDER = ('Coco', 'cocosearchhelp@gmail.com')
-    MAIL_SERVER = 'smtp.googlemail.com'
-    MAIL_PORT = 465
-    MAIL_USE_TLS = False
-    MAIL_USE_SSL = True
-    MAIL_USERNAME = os.getenv('MAIL_USERNAME')
-    MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
 
-    #Stripe
-    STRIPE_PRICE_INDIVIDUAL = os.getenv('STRIPE_PRICE_INDIVIDUAL')
-    STRIPE_PRICE_BUSINESS = os.getenv('STRIPE_PRICE_BUSINESS')
-    STRIPE_PRICE_PRO = os.getenv('STRIPE_PRICE_PRO')
-    STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')
-    STRIPE_PUBLISHABLE_KEY = os.getenv('STRIPE_PUBLISHABLE_KEY')
-    STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')
+def _normalize_db_url(url: str) -> str:
+    if not url:
+        return url
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://"):]
+    if "sslmode=" not in url:
+        sep = "&" if "?" in url else "?"
+        url = f"{url}{sep}sslmode=require"
+    return url
 
-    SQLALCHEMY_ECHO = False
-    FORCE_HTTPS = False
-
-    # Read IS_BETA from the environment variable
-    IS_BETA = False
 
 class ProductionConfig(Config):
-    ENV = 'production'
+    ENV = "production"
     DEBUG = False
-    FLASK_ENV = 'production'
-
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', '').replace(
-        'postgres://', 'postgresql://', 1
-    ) + '?sslmode=require'
-
-    # Scheduler
-    SCHEDULER_JOBSTORES = {
-        'default': {
-            'type': 'sqlalchemy',
-            'url': SQLALCHEMY_DATABASE_URI  # Use your existing database URI
-        }
-    }
-
-    SCHEDULER_EXECUTORS = {'default': {'type': 'threadpool', 'max_workers': 50}}
-    SCHEDULER_COALESCE = True
-    SCHEDULER_JOB_DEFAULTS = {
-        'coalesce': False,           # Process all missed job runs
-        'max_instances': 10,         # Allow multiple instances of the same job
-        'misfire_grace_time': 3600   # 1 hour grace time for missed jobs
-    }
-
-    # Improved database connection pool settings
-    SQLALCHEMY_ENGINE_OPTIONS = {
-        'pool_size': 20,             # Increase from current 10
-        'max_overflow': 30,          # Increase from current 20
-        'pool_timeout': 30,          # Increase from current 10
-        'pool_recycle': 1800,        # 30 minutes instead of 5 minutes
-        'pool_pre_ping': True        # Keep this setting
-    }
-
-    # Mail configs - remove commas at end of lines
-    MAIL_SERVER = 'smtp.gmail.com'
-    MAIL_PORT = 465
-    MAIL_USE_TLS = False
-    MAIL_USE_SSL = True
-    MAIL_USERNAME = os.getenv('MAIL_USERNAME')
-    MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
-    MAIL_DEFAULT_SENDER = ('Coco', 'cocosearchhelp@gmail.com')
-
-    DEBUG = False
-
-    SCHEDULER_RUN = os.environ.get('DYNO') in ('web.1', None)
-    SCHEDULER_API_ENABLED = False
-
-    IS_BETA = True
-
-    # Force HTTPS
-    SESSION_COOKIE_SECURE = True
-    REMEMBER_COOKIE_SECURE = True
-    PREFERRED_URL_SCHEME = 'https'
-    
-    # HTTP Strict Transport Security
-    SECURITY_HSTS_ENABLED = True
-    SECURITY_HSTS_SECONDS = 31536000  # 1 year
-    SECURITY_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURITY_HSTS_PRELOAD = True
-
-    def __init__(self):
-        self.validate_mail_config()
-    
-    def validate_mail_config(self):
-        """Explicit mail configuration validation"""
-        if not isinstance(self.MAIL_SERVER, str):
-            raise TypeError(f"MAIL_SERVER must be string, got {type(self.MAIL_SERVER)}")
-        if not isinstance(self.MAIL_PORT, int):
-            raise TypeError(f"MAIL_PORT must be integer, got {type(self.MAIL_PORT)}")
-
-
-class SchedulerConfig:
-    JOBSTORE_URI = os.getenv('SCHEDULER_DATABASE_URI')
-    JOBSTORE_TABLE = 'apscheduler_jobs'
-    TIMEZONE = os.getenv('TIMEZONE')
+    SQLALCHEMY_DATABASE_URI = _normalize_db_url(os.environ.get("DATABASE_URL", ""))
 
 
 config = {
-    'development':  DevelopmentConfig,
-    'production': ProductionConfig,
-    'testing': TestingConfig
-} 
+    "development": DevelopmentConfig,
+    "testing": TestingConfig,
+    "production": ProductionConfig,
+}
