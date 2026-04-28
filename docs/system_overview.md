@@ -1,200 +1,352 @@
-# Coco Search System Overview
+# Coco Search — System Overview
 
-## Product Goal
+This document walks the full lifecycle of a search: from a logged-in user submitting a form, through scheduling, eBay calls, item processing, and notification delivery. It also flags the gaps where wiring exists but the default code path short-circuits the feature.
 
-Coco Search is an eBay notifier SaaS. Users create saved searches, the app monitors eBay at a configured interval, stores matching items, and decides whether to notify the user about new or changed products.
+Read this top-to-bottom once. After that, the **End-to-End Walkthrough** and **What's Live vs Stubbed** sections are the working references.
 
-The long-term goal is not just keyword matching. The app should learn what each user is likely to care about from explicit feedback and interactions.
+---
 
-## Current Major Components
+## 1. Product
 
-### eBay SDK
+Coco Search is a multi-tenant eBay notifier. A user defines a **saved search** (keywords + filters + cadence) and the system polls eBay on their behalf, deduplicates results, and pushes notifications (Telegram + email) for new matches, price drops, and auctions ending soon.
 
-Package: `ebay_client/`
+The long-term direction is an agentic backend: an iOS / chat client where the user only states intent, and agents handle search creation, refinement, and feedback. The current codebase is the deterministic plumbing underneath that vision.
 
-Responsibilities:
+---
 
-- Own all direct eBay API interactions.
-- Handle OAuth credentials and access tokens.
-- Call Browse search endpoints.
-- Call Analytics/rate-limit endpoints.
-- Parse eBay responses into SDK-level item dictionaries.
+## 2. Tech Stack
 
-This package should stay independent from Flask, SQLAlchemy, Stripe, notification code, and Coco-specific search/relevance rules.
+- **Web framework**: Flask (app factory in [app/__init__.py](app/__init__.py))
+- **ORM**: SQLAlchemy + Alembic migrations (`migrations/`)
+- **Database**: PostgreSQL (JSONB columns used heavily for `telegram_chat_ids`, `notification_preferences`, `tier`)
+- **Auth**: Flask-Login (server-side sessions, cookie-based)
+- **Forms / CSRF**: Flask-WTF + WTForms
+- **Security headers**: Flask-Talisman; **Rate limiting**: Flask-Limiter
+- **Email**: Flask-Mail (SMTP)
+- **Background jobs**: APScheduler with a SQLAlchemy job store (jobs persist across restarts)
+- **eBay SDK**: standalone `ebay_client/` package (OAuth + Browse API + Analytics)
+- **Billing**: Stripe (webhooks at [app/routes/stripe_webhook.py](app/routes/stripe_webhook.py))
+- **Telegram**: direct HTTPS calls via `requests` from [app/notifications/telegram.py](app/notifications/telegram.py)
 
-### Saved Searches
+There is **no JSON API surface**. Every entry point is an HTML route guarded by a session cookie.
 
-Current files:
+---
 
-- `app/forms.py`
-- `app/routes/queries.py`
-- `app/models.py`
-- `app/searches/`
+## 3. Authentication & User Scoping
 
-Responsibilities:
+### How a user signs in
 
-- Let users create searches.
-- Store search keywords, marketplace, filters, and schedule.
-- Enforce a minimum check interval of 5 minutes.
-- Convert stored searches into executable eBay SDK requests.
+Defined in [app/routes/auth.py](app/routes/auth.py). Flask-Login session cookies; passwords hashed with werkzeug; email confirmation and password reset use itsdangerous time-bound tokens emailed via Flask-Mail.
 
-Current legacy search parameters:
+### How a request is scoped to a user
 
-- `required_keywords`
-- `excluded_keywords`
+Every protected route uses `@login_required`, which makes `flask_login.current_user` available. All search routes pull `current_user.id` and store it as `UserQuery.user_id`. Database reads are filtered by that user ID — there is no row-level security in Postgres; isolation is enforced application-side.
 
-These should remain as rule-based hard filters, but they should not be the primary relevance strategy long term.
+### What's *not* there
 
-### Search Execution
+- No API tokens / JWT / OAuth-for-third-parties.
+- No admin role separation in code (a few routes check `current_user.is_admin` but tooling around it is thin).
+- No per-request tenant header — sessions only.
 
-Current files:
+This matters for the agentic future: an iOS app or external agent will need a real API surface (token-based auth, JSON endpoints). Today the only programmatic surfaces are the Stripe webhook and the eBay outbound client.
 
-- `app/searches/execution.py`
-- `app/searches/scheduled.py`
-- `app/jobs/query_check.py`
+---
 
-Responsibilities:
+## 4. Domain Model (the tables that matter)
 
-- Run saved searches on schedule.
-- Call `ebay_client`.
-- Apply legacy hard filters.
-- Return candidate items for storage and relevance evaluation.
+All in [app/models.py](app/models.py). Grouped by purpose:
 
-### Item Storage And Identity
+**Identity & billing**
+- `User` — Flask-Login `UserMixin`. Holds `email`, `password_hash`, `confirmed`, `telegram_connected`, `telegram_chat_ids` (JSONB: `{main, additional[]}`), `notification_preferences` (JSONB), `tier` (JSONB plan/limits), Stripe customer/subscription IDs.
 
-Current files:
+**Search definitions**
+- `UserQuery` — one row per saved search. UUID `query_id`, FKs to `User` and `Keyword`, plus filter columns (`min_price`, `max_price`, `condition`, `marketplace`, `item_location`, `buying_options`, `required_keywords`, `excluded_keywords`), schedule columns (`check_interval` minutes, default 5; `is_active`; `first_run`; `last_full_run`/`next_full_run`; `last_recent_run`).
+- `Keyword` — deduped phrases shared across users (`keyword_text` unique).
+- `KeywordItems` — many-to-many bridge between keywords and items.
 
-- `app/models.py`
-- `app/repositories/items.py`
-- `app/searches/item_processor.py`
+**Items & observations**
+- `Item` — global eBay item, deduped by `ebay_id`. Snapshot of price, currency, URL, condition, seller, location, end-time, etc.
+- `UserQueryItems` — links a `UserQuery` to an `Item` it has matched, with flags like `auction_ending_notification_sent`.
+- `ItemObservation` — append-only log of observed price/state per item per run. **Schema exists; not written by the default code path** (see §10).
+- `ItemFeatureSnapshot` — feature vectors used by the relevance layer.
 
-Responsibilities:
+**Relevance & feedback**
+- `UserItemInteraction` — explicit interactions (clicked, dismissed, purchased, etc).
+- `ItemRelevanceFeedback` — legacy thumbs-up/down feedback.
 
-- Store global eBay items.
-- Link items to keywords and user searches.
-- Detect duplicates by eBay item ID.
-- Detect updates, price drops, and auctions ending soon.
+**Events & notifications**
+- `DomainEvent` — outbox pattern (new item, price drop, auction ending). **Schema exists; not written by the default code path** (see §10).
+- `NotificationRecord` — what was sent, to whom, via which channel. **Not written by the default code path** (see §10).
 
-### Relevance And ML
+**Operational**
+- `SearchRun` — one row per scrape attempt with timing/outcome. **Not written by default** (see §10).
 
-Current files:
+---
 
-- `app/relevance/`
-- `app/models.py` via `ItemRelevanceFeedback`
+## 5. Search Creation Flow
 
-Responsibilities:
+### What the user submits
 
-- Record explicit user feedback.
-- Extract item/search features.
-- Decide whether a user is likely to want a notification for an item.
-- Start with heuristics and feedback lookup.
-- Later support a trained classifier or clustering-based pipeline.
+`QueryForm` in [app/forms.py](app/forms.py):
 
-Target feedback/interactions:
+| Field | Notes |
+|---|---|
+| `keywords` | Required. Free text. |
+| `min_price` / `max_price` | Optional numeric. |
+| `check_interval` | Minutes between recent-scrape jobs. **Min 5, max 120.** Default 5. |
+| `required_keywords` / `excluded_keywords` | Hard filters applied post-scrape. |
+| `marketplace` | Default `EBAY_GB`. |
+| `item_location` | Default `any`. |
+| `condition` | `''` / `NEW` / `USED`. |
+| `buying_options` | `FIXED_PRICE\|AUCTION` / `FIXED_PRICE` / `AUCTION`. |
 
-- likely to buy / not likely to buy
-- relevant / not relevant
-- clicked
-- dismissed
-- notified
-- ignored
-- purchased
+### Route → service
 
-Target features:
+`POST /queries/create` (or similar) in [app/routes/queries.py](app/routes/queries.py) calls `_create_saved_search` (around line 223), which:
 
-- item title
-- item description if available
-- price
-- condition
-- category
-- location
-- seller features
-- query text
-- marketplace
+1. **Quota check** against `current_user.tier`.
+2. **Resolve `Keyword`** (find-or-create on `keyword_text`).
+3. **Duplicate check** — same user + same keyword + same filters → reject.
+4. **INSERT `UserQuery`** with `is_active=True`, `first_run=True`.
+5. **`_load_historical_items`** — backfills `UserQueryItems` from already-stored `Item` rows that match the filters. **No eBay call happens here.**
+6. Commit and redirect.
 
-### Notifications
+The HTTP request returns *without ever calling eBay*. The actual scraping starts on the next scheduler tick (see §6).
 
-Current files:
+---
 
-- `app/notifications/`
-- `app/utils/notifications.py`
+## 6. Scheduling
 
-Responsibilities:
+The scheduler is APScheduler embedded in the Flask process, using a SQLAlchemy job store (config in [config.py](config.py)). Jobs survive process restarts.
 
-- Convert domain events into notifications.
-- Respect user notification preferences.
-- Send via Telegram/email adapters.
+### Three kinds of jobs per query
 
-Notification decisions should eventually depend on relevance output, not only whether an item is new.
+`add_query_jobs(query_id)` in [app/_scheduler/job_manager.py](app/_scheduler/job_manager.py) registers two jobs per active query:
 
-## Target Monitoring Flow
+- **`query_<id>_full`** — runs every **24 hours**, with the *first run executed immediately*. Intended as the heavy "rebaseline" pass.
+- **`query_<id>_recent`** — runs every `check_interval` minutes (≥5). Intended as the cheap "have any new items appeared?" pass.
 
-```text
-User creates saved search
--> validate search and schedule
--> run onboarding preview search
--> show diverse candidate items
--> ask "Would you be likely to buy this?"
--> store feedback/interactions
--> scheduled monitoring begins
--> eBay SDK returns candidate items
--> hard filters run
--> item is normalized and stored
--> relevance service scores item for user/search
--> domain event is emitted
--> notification service sends only if relevant enough
-```
+### Reconciliation loop
 
-## Onboarding Preview Flow
+A third, global job runs every **60 seconds**: `sync_jobs` in [app/jobs/snyc_jobs.py](app/jobs/snyc_jobs.py) (note typo in filename). It calls `ScheduledJobSynchronizer().sync()`, which:
 
-When a user creates a search, the app should fetch an initial sample of results before relying on notifications.
+- Walks every `UserQuery` where `is_active=True`.
+- Ensures both APScheduler jobs exist for it. If not, calls `add_query_jobs`.
+- Removes APScheduler jobs whose query was deactivated/deleted.
 
-Suggested first implementation:
+**This is why the create-search route doesn't have to register jobs itself.** The next sync tick (≤60s away) will pick the new query up. The trade-off is a worst-case 60-second delay between creating a search and the first eBay call.
 
-1. Fetch about 100 items from eBay for the saved search.
-2. Apply hard filters.
-3. Extract lightweight features.
-4. Select about 20 diverse examples.
-5. Ask the user whether they would be likely to buy each item.
-6. Store feedback for the relevance pipeline.
+### Why two cadences
 
-The first version should use diverse sampling, not a full clustering model. Clustering can replace or improve the sampler later.
+The user designed this against the eBay rate limit (~5000 calls/day per credential). Recent scrapes paginate just enough to detect new items; full scrapes refresh the whole result set. **Caveat**: today both cadences call the same eBay function with the same parameters (see §7) — the *intent* is good, the *implementation* doesn't realize the savings yet.
 
-## Recommended Next Slice
+---
 
-Build the saved-search definition and onboarding-preview layer.
+## 7. eBay Execution
 
-Why:
+[app/searches/execution.py](app/searches/execution.py) contains `scrape_ebay` and `scrape_new_items` (lines 64–94). **They are byte-identical right now** — both call `ebay_client.api.search_items(keywords, filters, sort_order, max_pages, marketplace)`. Refactoring `scrape_new_items` to a smaller `max_pages` + `EndingSoonest`/`NewlyListed` sort is the obvious next optimization.
 
-- It is the bridge between user-created searches and ML/relevance.
-- It defines the domain language before execution, storage, and notifications become more complex.
-- It can be implemented without changing database schema initially.
-- It preserves legacy keyword filters while preparing the ML pipeline.
+`ebay_client/` is independent of Flask. It owns OAuth tokens, Browse search calls, and rate-limit checks. Nothing in `ebay_client/` imports from `app/`.
 
-Suggested files:
+A simple **circuit breaker** (threshold 3 failures, 60s recovery) wraps the outbound calls.
 
-```text
-app/searches/definitions.py
-app/searches/mapping.py
-app/searches/onboarding.py
-app/searches/sampling.py
-app/relevance/features.py
-```
+---
 
-Suggested core API:
+## 8. Item Processing
+
+[app/searches/item_processor.py](app/searches/item_processor.py) defines `SearchItemProcessor`. `process()` is called by the scheduled job with the list of raw items returned from eBay. For each item it:
+
+1. Applies **hard filters** (`required_keywords`, `excluded_keywords`, price bounds the SDK didn't enforce).
+2. **Upserts `Item`** (find-or-create by `ebay_id`).
+3. **Links `UserQueryItems`** (skips if the link already exists).
+4. **Suppresses notifications on first run** — `UserQuery.first_run=True` means we silently baseline; only after that do new items become notification-worthy.
+5. Calls the notification service for items that pass relevance.
+
+### ⚠️ Default-constructor short-circuits (lines 75–77)
 
 ```python
-saved_search = saved_search_from_model(user_query)
-params = to_ebay_search_params(saved_search)
-preview = SearchOnboardingService().create_preview(saved_search)
-features = extract_item_features(item, saved_search)
+self.notifications = notification_service or EventNotificationService()
+self.events = event_repository or self.items
+self.observations = observation_repository or self.items
 ```
 
-## Boundaries To Preserve
+`ItemRepository` (used as the default `events` and `observations` repository) has neither `create()` for `DomainEvent` nor `create()` for `ItemObservation`. The persistence helpers `_persist_domain_event` / `_persist_observation` try `repository.create(...)` then fall back to optional `record_domain_event` / `record_observation` hooks — neither exists on `ItemRepository`.
 
-- `ebay_client` only talks to eBay.
-- `app/searches` owns saved-search definitions, execution, onboarding, and hard filters.
-- `app/relevance` owns feature extraction, feedback, scoring, and future model inference.
-- `app/repositories` owns database access.
-- `app/notifications` owns event-to-notification mapping and channel adapters.
-- Scheduled jobs should stay thin wrappers.
+**Net effect:** unless a caller explicitly injects a `DomainEventRepository` and an `ItemObservationRepository`, the `domain_events` and `item_observations` tables are never written to. Schema and classes are in place; the wiring is not.
+
+---
+
+## 9. Notifications
+
+[app/notifications/service.py](app/notifications/service.py) `EventNotificationService` orchestrates: relevance check → channel dispatch → record.
+
+- **Channels**: Telegram via [app/notifications/telegram.py](app/notifications/telegram.py) (HTTPS to `api.telegram.org`); email via [app/utils/email.py](app/utils/email.py) (Flask-Mail).
+- **Per-user routing**: `User.telegram_chat_ids` JSONB holds `{main, additional}`; `User.notification_preferences` controls which event types go to which channel.
+- **Test endpoint**: `/telegram/send_test_notification` ([app/routes/telegram.py:50](app/routes/telegram.py:50)) for manual verification.
+
+### ⚠️ Two more default-constructor short-circuits
+
+[app/notifications/relevance.py:64](app/notifications/relevance.py:64):
+```python
+self.relevance_service = relevance_service or AllowAllRelevanceService()
+```
+The real `RelevanceService` (with hard filters, feedback overrides, baseline scorer) lives in [app/relevance/service.py](app/relevance/service.py) but is **not wired into the live notification path**. Today every item that reaches the notification stage is allowed through.
+
+[app/notifications/records.py:22](app/notifications/records.py:22):
+```python
+if self.repository is None:
+    return 0
+```
+`NotificationRecordCreator` defaults to `repository=None`, so the `notification_records` table is never written. We have *no* persisted history of what was sent.
+
+---
+
+## 10. Relevance Layer
+
+[app/relevance/service.py](app/relevance/service.py) defines `RelevanceService.should_notify(user, item, query)`:
+
+1. Hard filters (price/condition/keywords).
+2. Explicit feedback override (`ItemRelevanceFeedback` thumbs-down → suppress).
+3. `BaselineRelevanceScorer` (heuristic; placeholder for a future model).
+
+The intended training signals are `UserItemInteraction` rows (clicked, dismissed, purchased, etc.) and `ItemFeatureSnapshot` features. None of this is on the live path yet — see §9.
+
+`SearchOnboardingService` exists for the "show 20 diverse items, ask which the user would buy" preview flow but **no route exposes it**. Onboarding is dead code waiting for a UI.
+
+---
+
+## 11. End-to-End Walkthrough
+
+```
+[Browser]
+   │ session cookie (Flask-Login)
+   ▼
+POST /queries/create  ─── app/routes/queries.py::_create_saved_search
+   │   • quota check
+   │   • find-or-create Keyword
+   │   • duplicate check
+   │   • INSERT UserQuery (first_run=True, is_active=True)
+   │   • _load_historical_items  ◄── no eBay call
+   ▼
+DB commit, HTTP redirect.
+
+… up to 60s later …
+
+APScheduler tick → sync_jobs every 60s
+   │ ScheduledJobSynchronizer.sync()
+   │   • finds UserQuery with no jobs
+   │   • add_query_jobs(query_id)
+   ▼
+Two jobs registered:
+   query_<id>_full    (24h, fires immediately)
+   query_<id>_recent  (every check_interval min)
+
+Job fires → ScheduledQueryService.run_query()
+   │ scrape_ebay() → ebay_client.api.search_items()
+   ▼
+SearchItemProcessor.process(items)
+   │ hard filters → upsert Item → link UserQueryItems
+   │ if first_run: suppress notifications, then first_run = False
+   │ ⚠ DomainEvent NOT persisted (default repo lacks create())
+   │ ⚠ ItemObservation NOT persisted (same)
+   ▼
+EventNotificationService.notify(...)
+   │ ⚠ AllowAllRelevanceService → everything allowed
+   │ Telegram send (real) + Email send (real)
+   │ ⚠ NotificationRecordCreator → no-op (repository=None)
+   ▼
+[User's Telegram / inbox]
+```
+
+---
+
+## 12. What's Live vs Stubbed
+
+| Capability | State |
+|---|---|
+| User signup / login / email confirm / password reset | **Live** |
+| Stripe webhook for billing | **Live** |
+| Telegram connect + send | **Live** |
+| Search creation form + DB persistence | **Live** |
+| Historical-item backfill on create | **Live** |
+| APScheduler 60s reconciliation loop | **Live** |
+| Full + recent scrape jobs registered per query | **Live** |
+| eBay Browse search via `ebay_client/` | **Live** |
+| Item dedupe + UserQueryItems linking | **Live** |
+| First-run suppression | **Live** |
+| Telegram + email delivery | **Live** |
+| `recent_scrape` actually being lighter than `full_scrape` | **Stubbed** (identical functions) |
+| `DomainEvent` persistence | **Stubbed** (default repo missing `create`) |
+| `ItemObservation` persistence | **Stubbed** (same) |
+| `SearchRun` persistence | **Stubbed** (`run_recorder=None` default) |
+| `NotificationRecord` persistence | **Stubbed** (`repository=None` default) |
+| `RelevanceService` on live path | **Stubbed** (`AllowAllRelevanceService` default) |
+| `SearchOnboardingService` preview flow | **Built but unrouted** |
+| JSON API for an iOS / agent client | **Not started** |
+| Admin tooling | **Minimal** |
+
+---
+
+## 13. Codebase Map
+
+```
+app/
+  __init__.py            Flask factory; registers blueprints + sync_jobs
+  models.py              All SQLAlchemy models
+  forms.py               WTForms (incl. QueryForm)
+  extensions.py          db, login_manager, mail, csrf, scheduler, encryptor
+
+  routes/
+    auth.py              register/login/confirm/reset
+    queries.py           create / list / edit / delete saved searches
+    telegram.py          connect chat IDs, test notification
+    settings.py
+    subscription.py / stripe_webhook.py
+    main.py / contact_feedback.py / legal.py
+
+  searches/
+    mapping.py           UserQuery <-> SavedSearch dataclasses
+    execution.py         scrape_ebay / scrape_new_items
+    item_processor.py    SearchItemProcessor (the hot path)
+    scheduled.py         ScheduledQueryService (called by APScheduler)
+    onboarding.py        SearchOnboardingService (unrouted)
+
+  _scheduler/
+    job_manager.py       add_query_jobs / remove_query_jobs
+    synchronizer.py      reconciliation logic
+
+  jobs/
+    snyc_jobs.py         the 60s reconciliation tick (typo intentional in filename)
+
+  notifications/
+    service.py           EventNotificationService
+    telegram.py          Telegram HTTP client
+    relevance.py         NotificationRelevanceFilter (defaults to AllowAll)
+    records.py           NotificationRecordCreator (no-op by default)
+
+  relevance/
+    service.py           RelevanceService + BaselineRelevanceScorer
+    features.py          (skeleton) feature extraction
+
+  repositories/
+    items.py             ItemRepository
+    …                    one wrapper per aggregate
+
+  utils/
+    email.py             Flask-Mail helpers
+
+ebay_client/              Standalone eBay SDK (no Flask imports)
+migrations/               Alembic
+config.py                 DevelopmentConfig / ProductionConfig
+```
+
+---
+
+## 14. Practical Mental Model
+
+When you sit down to change something, hold these four ideas:
+
+1. **The HTTP layer never calls eBay.** It writes a row and returns. Anything observable to the user happens on the scheduler.
+2. **The 60-second sync loop is the load-bearing piece.** If it stops, no new searches start running. If it runs twice, you get duplicate jobs (the synchronizer is idempotent — verify this when refactoring).
+3. **Default constructor arguments are silently disabling four whole features** (events, observations, runs, notification records, real relevance). When you want to turn one on, you wire a real repository / service into the constructor — you don't write new code.
+4. **There is no API.** Everything assumes a session cookie. The agentic / iOS direction needs a parallel JSON surface; it's not a refactor of existing routes.
