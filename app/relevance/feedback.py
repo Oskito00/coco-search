@@ -19,8 +19,12 @@ class RelevanceFeedbackService:
         is_relevant = feedback == "relevant"
         if feedback_entry:
             feedback_entry.is_relevant = is_relevant
-            feedback_entry.required_keywords = user_query_item.user_query.required_keywords
-            feedback_entry.excluded_keywords = user_query_item.user_query.excluded_keywords
+            feedback_entry.required_keywords = (
+                user_query_item.user_query.required_keywords
+            )
+            feedback_entry.excluded_keywords = (
+                user_query_item.user_query.excluded_keywords
+            )
         else:
             feedback_entry = ItemRelevanceFeedback(
                 user_id=user.id,
