@@ -8,6 +8,9 @@ from sqlalchemy.dialects.postgresql import NUMERIC, UUID
 from sqlalchemy import JSON, text
 from sqlalchemy.dialects.postgresql import JSONB
 
+
+#For some reason with
+
 JSON_DOCUMENT = JSONB().with_variant(db.JSON(), 'sqlite')
 
 
@@ -17,7 +20,6 @@ class TimestampMixin:
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
 
-#For some reason with
 class APSchedulerJob(db.Model):
     __tablename__ = 'apscheduler_jobs'
     id = db.Column(db.String(191), primary_key=True)
