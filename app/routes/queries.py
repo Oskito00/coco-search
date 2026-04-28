@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime, timezone
-from decimal import Decimal
 from typing import Any
 
 from flask import (
@@ -31,6 +29,7 @@ from app.models import (
 )
 from app.relevance import RelevanceFeedbackService
 from app.repositories import ItemRepository
+from app.searches import SavedSearch, saved_search_from_model
 from app.utils.graph_helpers import get_price_data
 from app.utils.price_helpers import remove_price_outliers
 from app.utils.query_helpers import update_user_usage
@@ -39,95 +38,6 @@ from app.utils.text_helpers import item_matches_keywords
 bp = Blueprint("queries", __name__, url_prefix="/queries")
 
 VALID_FEEDBACK = {"relevant", "irrelevant"}
-
-
-@dataclass(frozen=True)
-class SearchFilters:
-    """Route-facing filter snapshot for saved-search service calls."""
-
-    min_price: Decimal | None
-    max_price: Decimal | None
-    item_location: str | None
-    condition: str | None
-    buying_options: str | None
-    required_keywords: str
-    excluded_keywords: str
-
-
-@dataclass(frozen=True)
-class SearchSchedule:
-    """Route-facing schedule snapshot for saved-search service calls."""
-
-    check_interval: int
-    first_run: bool
-    last_full_run: datetime | None
-    next_full_run: datetime | None
-    last_recent_run: datetime | None
-
-
-@dataclass(frozen=True)
-class SavedSearch:
-    """Route-facing saved-search snapshot detached from SQLAlchemy."""
-
-    id: Any
-    user_id: int
-    keyword_id: int
-    keywords: str
-    marketplace: str
-    is_active: bool
-    filters: SearchFilters
-    schedule: SearchSchedule
-
-
-def saved_search_from_model(user_query: UserQuery) -> SavedSearch:
-    """Create a saved-search snapshot from the current database model."""
-
-    keyword_text = user_query.keyword.keyword_text if user_query.keyword else ""
-    return SavedSearch(
-        id=user_query.query_id,
-        user_id=user_query.user_id,
-        keyword_id=user_query.keyword_id,
-        keywords=keyword_text,
-        marketplace=user_query.marketplace,
-        is_active=user_query.is_active,
-        filters=SearchFilters(
-            min_price=user_query.min_price,
-            max_price=user_query.max_price,
-            item_location=_query_location_filter(user_query.item_location),
-            condition=_optional_text(user_query.condition),
-            buying_options=_optional_text(user_query.buying_options),
-            required_keywords=_text_value(user_query.required_keywords),
-            excluded_keywords=_text_value(user_query.excluded_keywords),
-        ),
-        schedule=SearchSchedule(
-            check_interval=user_query.check_interval,
-            first_run=bool(user_query.first_run),
-            last_full_run=user_query.last_full_run,
-            next_full_run=user_query.next_full_run,
-            last_recent_run=user_query.last_recent_run,
-        ),
-    )
-
-
-def to_ebay_search_params(saved_search: SavedSearch) -> dict[str, Any]:
-    """Map a saved search into executor/search-client parameters."""
-
-    filters = {
-        "min_price": saved_search.filters.min_price,
-        "max_price": saved_search.filters.max_price,
-        "item_location": saved_search.filters.item_location,
-        "condition": saved_search.filters.condition,
-        "buying_options": saved_search.filters.buying_options,
-    }
-    return {
-        "keywords": saved_search.keywords,
-        "marketplace": saved_search.marketplace,
-        "filters": {
-            key: value for key, value in filters.items() if value not in (None, "")
-        },
-        "required_keywords": saved_search.filters.required_keywords,
-        "excluded_keywords": saved_search.filters.excluded_keywords,
-    }
 
 
 @bp.route("/manage")
@@ -466,10 +376,9 @@ def _historical_items_for_search(
         )
     )
 
-    if saved_search.filters.item_location is not None:
-        query = query.filter(
-            Item.location_country == saved_search.filters.item_location
-        )
+    location = _saved_search_location_filter(saved_search)
+    if location is not None:
+        query = query.filter(Item.location_country == location)
 
     if excluded_item_ids is not None:
         query = query.filter(~Item.item_id.in_(excluded_item_ids))
@@ -480,7 +389,7 @@ def _historical_items_for_search(
 
 
 def _item_matches_saved_search(item: Item, saved_search: SavedSearch) -> bool:
-    location = saved_search.filters.item_location
+    location = _saved_search_location_filter(saved_search)
     if location is not None and item.location_country != location:
         return False
 
@@ -489,9 +398,14 @@ def _item_matches_saved_search(item: Item, saved_search: SavedSearch) -> bool:
 
     return item_matches_keywords(
         item,
-        saved_search.filters.required_keywords,
-        saved_search.filters.excluded_keywords,
+        _text_value(saved_search.filters.required_keywords),
+        _text_value(saved_search.filters.excluded_keywords),
     )
+
+
+def _saved_search_location_filter(saved_search: SavedSearch) -> str | None:
+    item_location = saved_search.filters.item_location
+    return None if item_location in (None, "", "any") else item_location
 
 
 def _feedback_blocks_item(user_id: int, keyword_id: int, item_id: int) -> bool:
@@ -587,14 +501,6 @@ def _add_usage_or_raise(check_interval: int) -> None:
 def _remove_usage_if_needed(check_interval: int | None) -> None:
     if check_interval is not None:
         update_user_usage(current_user, check_interval, "remove")
-
-
-def _query_location_filter(item_location: str | None) -> str | None:
-    return None if item_location in (None, "", "any") else item_location
-
-
-def _optional_text(value: str | None) -> str | None:
-    return value or None
 
 
 def _text_value(value: str | None) -> str:
