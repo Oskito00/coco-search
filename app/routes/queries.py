@@ -9,6 +9,7 @@ from app.utils.graph_helpers import get_price_data
 from app.utils.price_helpers import remove_price_outliers
 from app.utils.query_helpers import update_user_usage
 from app.utils.text_helpers import item_matches_keywords
+from app.relevance import RelevanceFeedbackService
 import numpy as np
 
 bp = Blueprint('queries', __name__, url_prefix='/queries')
@@ -411,41 +412,18 @@ def query_details(query_id):
 @bp.route('/feedback/<string:query_id>/<int:item_id>', methods=['POST'])
 @login_required
 def submit_feedback(query_id, item_id):
-    user_query_item = UserQueryItems.query.get_or_404((query_id, item_id))
-    
-    if user_query_item.user_query.user_id != current_user.id:
-        abort(403)
-    
     feedback = request.form.get('feedback')
     if feedback not in ['relevant', 'irrelevant']:
         abort(400)
-    
-    # Handle feedback recording
-    feedback_entry = ItemRelevanceFeedback.query.filter_by(
-        user_id=current_user.id,
-        item_id=user_query_item.item_id,
-        keyword_id=user_query_item.user_query.keyword_id
-    ).first()
 
-    if feedback_entry:
-        print("Required keywords:", user_query_item.user_query.required_keywords)
-        print("Excluded keywords:", user_query_item.user_query.excluded_keywords)
-        feedback_entry.is_relevant = (feedback == 'relevant')
-        feedback_entry.required_keywords = user_query_item.user_query.required_keywords
-        feedback_entry.excluded_keywords = user_query_item.user_query.excluded_keywords
-    else:
-        print("required_keywords:", user_query_item.user_query.required_keywords)
-        print("excluded_keywords:", user_query_item.user_query.excluded_keywords)
-        feedback_entry = ItemRelevanceFeedback(
-            user_id=current_user.id,
-            item_id=user_query_item.item_id,
-            keyword_id=user_query_item.user_query.keyword_id,
-            required_keywords=user_query_item.user_query.required_keywords,
-            excluded_keywords=user_query_item.user_query.excluded_keywords,
-            is_relevant=(feedback == 'relevant'),
-            created_at=datetime.utcnow()
-        )
-        db.session.add(feedback_entry)
+    user_query_item, allowed = RelevanceFeedbackService().record_item_feedback(
+        current_user,
+        query_id,
+        item_id,
+        feedback,
+    )
+    if not allowed:
+        abort(403)
 
     if feedback == 'irrelevant':
         ordered_items = UserQueryItems.query.filter_by(query_id=query_id)\

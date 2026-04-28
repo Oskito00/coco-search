@@ -2,7 +2,7 @@ from flask_wtf import FlaskForm
 from wtforms import FieldList, HiddenField, StringField, PasswordField, SubmitField, FloatField, SelectField, IntegerField, SelectMultipleField, DecimalField
 from wtforms.validators import DataRequired, Email, EqualTo, NumberRange, Optional, InputRequired, Regexp
 from flask_wtf.csrf import CSRFProtect
-from app.ebay.constants import MARKETPLACE_IDS
+from ebay_client.marketplaces import MARKETPLACE_IDS
 
 csrf = CSRFProtect()
 

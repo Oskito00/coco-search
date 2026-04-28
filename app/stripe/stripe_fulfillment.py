@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 import stripe
 from flask import current_app
-from app.ebay import constants
+from app.billing import constants
 from app.models import User
 from app.extensions import db
 from app.utils.email import notify_user

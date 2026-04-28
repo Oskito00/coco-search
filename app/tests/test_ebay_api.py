@@ -1,12 +1,13 @@
 import pytest
 from unittest.mock import Mock
-from app.ebay.api import EbayAPI
+from ebay_client import EbayClient
+from app.utils.text_helpers import filter_items_by_keywords
 
 
 
 @pytest.fixture
 def ebay_api():
-    return EbayAPI(marketplace='EBAY_GB')
+    return EbayClient(marketplace='EBAY_GB')
 
 @pytest.fixture
 def mock_response():
@@ -28,7 +29,7 @@ def mock_items():
 
 @pytest.fixture
 def mock_ebay_api(mocker, mock_items):
-    api = EbayAPI()
+    api = EbayClient()
     mocker.patch.object(api, 'search', return_value={'items': mock_items})
     return api
 
@@ -38,7 +39,7 @@ def mock_ebay_api(mocker, mock_items):
 
 def test_required_keywords(app, mock_ebay_api, mock_items):
     with app.app_context():
-        filtered = mock_ebay_api._filter_items(
+        filtered = filter_items_by_keywords(
             mock_items, 
             required_keywords='charizard',
             excluded_keywords=''
@@ -48,7 +49,7 @@ def test_required_keywords(app, mock_ebay_api, mock_items):
 def test_excluded_keywords(app, mock_ebay_api, mock_items):
     # Test single exclusion
     with app.app_context():
-        filtered = mock_ebay_api._filter_items(
+        filtered = filter_items_by_keywords(
         mock_items,
         required_keywords='',
         excluded_keywords='base'
@@ -57,7 +58,7 @@ def test_excluded_keywords(app, mock_ebay_api, mock_items):
         assert all('base' not in item['title'].lower() for item in filtered)
     
         # Test multiple exclusions
-        filtered = mock_ebay_api._filter_items(
+        filtered = filter_items_by_keywords(
         mock_items,
         required_keywords='',
         excluded_keywords='base,shadowless'
@@ -66,7 +67,7 @@ def test_excluded_keywords(app, mock_ebay_api, mock_items):
 
 def test_combined_filters(app,mock_ebay_api, mock_items):
     with app.app_context():
-        filtered = mock_ebay_api._filter_items(
+        filtered = filter_items_by_keywords(
             mock_items,
             required_keywords='card',
             excluded_keywords='rare'
@@ -78,7 +79,7 @@ def test_combined_filters(app,mock_ebay_api, mock_items):
 
 def test_empty_filters(app, mock_ebay_api, mock_items):
     with app.app_context():
-        filtered = mock_ebay_api._filter_items(
+        filtered = filter_items_by_keywords(
             mock_items,
             required_keywords='',
             excluded_keywords=''
@@ -87,7 +88,7 @@ def test_empty_filters(app, mock_ebay_api, mock_items):
 
 def test_no_matches(app, mock_ebay_api, mock_items):
     with app.app_context():
-        filtered = mock_ebay_api._filter_items(
+        filtered = filter_items_by_keywords(
             mock_items,
             required_keywords='mewtwo',
             excluded_keywords=''
@@ -100,23 +101,23 @@ def test_no_matches(app, mock_ebay_api, mock_items):
 
 def test_condition_filter_combinations(app):
     with app.app_context():
-        api = EbayAPI()
+        api = EbayClient()
         
         # Test Any Condition (empty string)
         filters = {'condition': ''}
-        assert 'conditions' not in api._build_filter(filters)
+        assert 'conditions' not in api.browse.build_filter(filters)
     
         # Test New Condition
         filters = {'condition': 'NEW'}
-        assert 'conditions:{NEW}' in api._build_filter(filters)
+        assert 'conditions:{NEW}' in api.browse.build_filter(filters)
     
         # Test Used Condition 
         filters = {'condition': 'USED'}
-        assert 'conditions:{USED}' in api._build_filter(filters)
+        assert 'conditions:{USED}' in api.browse.build_filter(filters)
     
         # Test invalid condition
         filters = {'condition': 'RENEWED'}
-        assert 'conditions' not in api._build_filter(filters)
+        assert 'conditions' not in api.browse.build_filter(filters)
 
 #***********************
 #Buying Options Filtering Tests
@@ -124,27 +125,27 @@ def test_condition_filter_combinations(app):
 
 def test_buying_options_filter(app):
     with app.app_context():
-        api = EbayAPI()
+        api = EbayClient()
         
         # Any (default)
         filters = {'buying_options': 'FIXED_PRICE|AUCTION'}
-        assert 'buyingOptions' not in api._build_filter(filters)
+        assert 'buyingOptions' not in api.browse.build_filter(filters)
     
         # Buy It Now
         filters = {'buying_options': 'FIXED_PRICE'}
-        assert 'buyingOptions:{FIXED_PRICE}' in api._build_filter(filters)
+        assert 'buyingOptions:{FIXED_PRICE}' in api.browse.build_filter(filters)
     
         # Auction
         filters = {'buying_options': 'AUCTION'}
-        assert 'buyingOptions:{AUCTION}' in api._build_filter(filters)
+        assert 'buyingOptions:{AUCTION}' in api.browse.build_filter(filters)
 
 @pytest.mark.live  # Mark for live API tests
 def test_real_buying_options(app):
     with app.app_context():
-        api = EbayAPI(marketplace='EBAY_GB')
+        api = EbayClient(marketplace='EBAY_GB')
         
         # Test Buy It Now
-        buy_it_now_items = api.custom_search_query(
+        buy_it_now_items = api.search_items(
             "pokemon base set booster box 1st edition", 
             filters={'buying_options': 'FIXED_PRICE'}, 
         )
@@ -154,7 +155,7 @@ def test_real_buying_options(app):
             assert isinstance(item['price'], float)
         
         # Test Auction
-        auction_items = api.custom_search_query(
+        auction_items = api.search_items(
             "pokemon base set booster box 1st edition", 
             filters={'buying_options': 'AUCTION'}, 
         )
@@ -164,7 +165,7 @@ def test_real_buying_options(app):
                 # assert 'current_bid' in item  # If your parser extracts this
         
         # Test Any
-        any_items = api.custom_search_query("pokemon base set booster box 1st edition", filters={})
+        any_items = api.search_items("pokemon base set booster box 1st edition", filters={})
         assert len(any_items) >= len(buy_it_now_items) + (len(auction_items) if auction_items else 0)
 
 #***********************
@@ -173,8 +174,8 @@ def test_real_buying_options(app):
 
 def test_response_price_format(app):
     with app.app_context():
-        api = EbayAPI(marketplace='EBAY_US')
-        items = api.custom_search_query("pokemon base set booster box", filters={})
+        api = EbayClient(marketplace='EBAY_US')
+        items = api.search_items("pokemon base set booster box", filters={})
         print(items[0])
         assert len(items) > 0
         for item in items:
@@ -187,23 +188,23 @@ def test_response_price_format(app):
 
 def test_scrape_all_pages(app):
     with app.app_context():
-        api = EbayAPI()
-        items = api.search_all_pages("book")
+        api = EbayClient()
+        items = api.search_items("book", max_pages=2)
         assert 200 <= len(items) <= 400
         assert len(set(item['ebay_id'] for item in items)) == len(items)
 
 def test_search_new_items(app):
     with app.app_context():
-        api = EbayAPI()
-        items = api.custom_search_query("book")
+        api = EbayClient()
+        items = api.search_items("book")
         assert len(items) <= 200
 
 def test_search_raw_response(app):
     with app.app_context():
-        api = EbayAPI("EBAY_US")
-        raw_response = api.raw_search("iphone",filters={'item_location': 'any', 'min_price': 100, 'max_price': 200}, limit=1)  # Get raw response
+        api = EbayClient("EBAY_US")
+        raw_response = api.search_item_summaries("iphone",filters={'item_location': 'any', 'min_price': 100, 'max_price': 200}, limit=1)  # Get raw response
 
-        items = api.parse_response(raw_response)  # Processed items
+        items = api.parse_item_summary_response(raw_response)  # Processed items
         
         print("\n=== Raw Response Type ===")
         print(raw_response)  # Should be dict
@@ -223,15 +224,15 @@ def test_search_raw_response(app):
 @pytest.mark.live
 def test_raw_api_call(app):
     with app.app_context():
-        api = EbayAPI(marketplace='EBAY_IT')
-        raw_response = api.raw_search("apple ipad air 4th generation")
+        api = EbayClient(marketplace='EBAY_IT')
+        raw_response = api.search_item_summaries("apple ipad air 4th generation")
         print(raw_response)
 
 @pytest.mark.live
 def test_custom_search(app):
     with app.app_context():
-        api = EbayAPI(marketplace='EBAY_IT')
-        items = api.custom_search_query("apple ipad air 4th generation")
+        api = EbayClient(marketplace='EBAY_IT')
+        items = api.search_items("apple ipad air 4th generation")
         print("Items:", items)
         # print(items)
 
@@ -244,10 +245,10 @@ def test_custom_search(app):
 @pytest.mark.live
 def test_rate_limit_check(app):
     with app.app_context():
-        api = EbayAPI()
+        api = EbayClient()
         
         # Get rate limits
-        limits = api.check_rate_limits()
+        limits = api.get_rate_limits()
         
         # Validate response structure
         assert 'rateLimits' in limits, "Missing rateLimits key"
@@ -277,7 +278,5 @@ def test_rate_limit_check(app):
         assert browse_limits, "Browse API limits missing"
         assert 'limit' in browse_limits, "Missing limit field"
         assert 'remaining' in browse_limits, "Missing remaining field"
-
-
 
 

@@ -1,7 +1,7 @@
 from datetime import datetime
 import stripe
 
-from app.ebay.constants import TIER_LIMITS
+from app.billing.constants import TIER_LIMITS
 from app.models import User, db
 
 

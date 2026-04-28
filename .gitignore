@@ -1,5 +1,6 @@
 .env
 __pycache__/
+.local/
 known_items.json
 item_details.json
 venv/

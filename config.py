@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 import logging
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from sqlalchemy import create_engine
+from ebay_client.config import load_ebay_credentials
 
 load_dotenv(override=True)  # Load .env file
 
@@ -34,44 +35,7 @@ class Config:
     LOG_LEVEL = 'INFO'
     TESTING = False
 
-    EBAY_CREDENTIALS = [
-    {
-        'client_id': 'OscarAlb-Monitor-PRD-5ded7de14-d6ea23c9',
-        'client_secret': 'PRD-ded7de147834-332f-4231-8b70-afea',
-        'token': None,          # Will be populated automatically
-        'token_expiry': None   # Will be populated automatically
-    },
-    {
-        'client_id': 'RoryAlbe-Itemsear-PRD-f4c82e554-b68b4152',
-        'client_secret': 'PRD-4c82e5542278-55d5-44a7-a98e-8ca8',
-        'token': None,
-        'token_expiry': None
-    },
-    {
-        'client_id': 'Cristian-Analysis-PRD-924562b2f-44eeb76f',
-        'client_secret': 'PRD-24562b2f709c-4954-4de8-9832-4155',
-        'token': None,
-        'token_expiry': None
-    },
-    {
-        'client_id': 'LesleyAl-esp32-PRD-10e8fd9f1-89a477f8',
-        'client_secret': 'PRD-0e8fd9f1ff85-1b15-47f2-bf87-f652',
-        'token': None,
-        'token_expiry': None
-    },
-    {
-        'client_id': 'LaurenAl-weekend-PRD-b0e716ac4-a19c504a',
-        'client_secret': 'PRD-0e716ac46200-c9d9-400e-b850-2579',
-        'token': None,
-        'token_expiry': None
-    },
-    {
-        'client_id': 'WilliamB-analysis-PRD-fa71a2178-1826dca4',
-        'client_secret': 'PRD-a71a217857a4-edae-4c72-8d1f-53f2',
-        'token': None,
-        'token_expiry': None
-    }
-]
+    EBAY_CREDENTIALS = load_ebay_credentials()
     
     #Gmail authentication
     SECURITY_PASSWORD_SALT = os.getenv('SECURITY_PASSWORD_SALT')
@@ -238,8 +202,8 @@ class ProductionConfig(Config):
     MAIL_PORT = 465
     MAIL_USE_TLS = False
     MAIL_USE_SSL = True
-    MAIL_USERNAME = 'oscar.alberigo@gmail.com'
-    MAIL_PASSWORD = 'ufvx hcav zmad gsct'
+    MAIL_USERNAME = os.getenv('MAIL_USERNAME')
+    MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
     MAIL_DEFAULT_SENDER = ('Coco', 'cocosearchhelp@gmail.com')
 
     DEBUG = False

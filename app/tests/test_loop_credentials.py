@@ -2,7 +2,8 @@ import os
 import pytest
 from unittest.mock import Mock, patch
 from datetime import datetime, timedelta, timezone
-from app.ebay.api import EbayAPI
+from ebay_client import EbayClient
+from ebay_client.auth import InMemoryTokenStore
 from flask import Flask
 
 @pytest.fixture
@@ -11,14 +12,14 @@ def app():
     flask_app = Flask(__name__)
     flask_app.config['EBAY_CREDENTIALS'] = [
     {
-        'client_id': 'OscarAlb-Monitor-PRD-5ded7de14-d6ea23c9',
-        'client_secret': 'PRD-ded7de147834-332f-4231-8b70-afea',
+        'client_id': 'test-client-1',
+        'client_secret': 'test-secret-1',
         'token': None,          # Will be populated automatically
         'token_expiry': None   # Will be populated automatically
     },
     {
-        'client_id': 'RoryAlbe-Itemsear-PRD-f4c82e554-b68b4152',
-        'client_secret': 'PRD-4c82e5542278-55d5-44a7-a98e-8ca8',
+        'client_id': 'test-client-2',
+        'client_secret': 'test-secret-2',
         'token': None,
         'token_expiry': None
     }
@@ -53,9 +54,10 @@ def test_credential_rotation(mock_post, mock_credentials, app):
     
     # Create app context
     with app.app_context():
-        api = EbayAPI()
-        # Override credentials to use our test credentials
-        api.credentials = mock_credentials
+        api = EbayClient(
+            credentials=mock_credentials,
+            token_store=InMemoryTokenStore(),
+        )
         
         # Track used credentials
         used_indices = []
@@ -63,14 +65,16 @@ def test_credential_rotation(mock_post, mock_credentials, app):
         # Simulate 5 API calls
         for _ in range(5):
             # Get credential before call
-            expected_index = api.current_cred_index
+            expected_index = api.token_provider.current_cred_index
             used_indices.append(expected_index)
             
             # Trigger token refresh
-            api._get_token()
+            api.token_provider.get_token()
             
             # Verify rotation
-            assert api.current_cred_index == (expected_index + 1) % len(api.credentials)
+            assert api.token_provider.current_cred_index == (
+                expected_index + 1
+            ) % len(api.credentials)
         
         # Verify rotation pattern: [0, 1, 0, 1, 0] for 2 credentials
         assert used_indices == [0, 1, 0, 1, 0]
@@ -91,11 +95,13 @@ def test_token_refresh_flow(mock_get, mock_post, mock_credentials, app):
     mock_get.return_value.json.return_value = {'items': []}
     
     with app.app_context():
-        api = EbayAPI()
-        api.credentials = mock_credentials
+        api = EbayClient(
+            credentials=mock_credentials,
+            token_store=InMemoryTokenStore(),
+        )
         
         # First call - should use credential 0
-        api.raw_search("test")
+        api.search_item_summaries("test")
         mock_post.assert_called_with(
             'https://api.ebay.com/identity/v1/oauth2/token',
             auth=('test-client-1', 'test-secret-1'),
@@ -105,7 +111,7 @@ def test_token_refresh_flow(mock_get, mock_post, mock_credentials, app):
         )
         
         # Second call - should use credential 1
-        api.raw_search("test")
+        api.search_item_summaries("test")
         mock_post.assert_called_with(
             'https://api.ebay.com/identity/v1/oauth2/token',
             auth=('test-client-2', 'test-secret-2'),
@@ -122,7 +128,7 @@ def test_token_refresh_flow(mock_get, mock_post, mock_credentials, app):
 def test_real_world_rotation(app):
     """Integration test with real credentials (run sparingly)"""
     with app.app_context():
-        api = EbayAPI()
+        api = EbayClient(token_store=InMemoryTokenStore())
         
         # Track used client IDs
         used_client_ids = []
@@ -130,11 +136,11 @@ def test_real_world_rotation(app):
         # Make 3 quick calls
         for _ in range(3):
             # Store current credential before rotation
-            current_cred = api.credentials[api.current_cred_index]
+            current_cred = api.credentials[api.token_provider.current_cred_index]
             used_client_ids.append(current_cred['client_id'])
             
             # Make API call
-            result = api.raw_search("test")
+            result = api.search_item_summaries("test")
             assert 'itemSummaries' in result  # Verify basic response structure
         
         # Verify rotation pattern
