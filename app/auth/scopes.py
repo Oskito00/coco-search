@@ -1,0 +1,22 @@
+"""OAuth-style scope constants for API tokens."""
+
+SCOPE_USER_READ = "user:read"
+SCOPE_USER_WRITE = "user:write"
+SCOPE_SEARCHES_READ = "searches:read"
+SCOPE_SEARCHES_WRITE = "searches:write"
+SCOPE_NOTIFICATIONS_READ = "notifications:read"
+SCOPE_NOTIFICATIONS_WRITE = "notifications:write"
+SCOPE_SUBSCRIPTION_WRITE = "subscription:write"
+SCOPE_ADMIN = "admin"
+
+DEFAULT_SCOPES = [
+    SCOPE_USER_READ,
+    SCOPE_USER_WRITE,
+    SCOPE_SEARCHES_READ,
+    SCOPE_SEARCHES_WRITE,
+    SCOPE_NOTIFICATIONS_READ,
+    SCOPE_NOTIFICATIONS_WRITE,
+    SCOPE_SUBSCRIPTION_WRITE,
+]
+
+ALL_SCOPES = DEFAULT_SCOPES + [SCOPE_ADMIN]
