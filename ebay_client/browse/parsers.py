@@ -25,11 +25,14 @@ def _map_item_summary(item_data: ItemSummary, default_currency: str) -> ParsedIt
     auction_details = _parse_auction_details(
         item_data, raw_buying_options, default_currency
     )
+    shipping = _shipping_details(item_data, default_currency)
+    thumbnails = item_data.get("thumbnailImages") or []
 
     return {
         "ebay_id": item_data.get("itemId"),
         "legacy_id": item_data.get("legacyItemId"),
         "title": item_data.get("title", "No Title"),
+        "short_description": item_data.get("shortDescription"),
         "price": base_price["value"],
         "current_bid": _current_bid_value(auction_details),
         "current_bid_currency": _current_bid_currency(
@@ -39,6 +42,9 @@ def _map_item_summary(item_data: ItemSummary, default_currency: str) -> ParsedIt
         "url": item_data.get("itemWebUrl"),
         "image_url": _image_url(item_data),
         **_seller_details(item_data),
+        "top_rated_seller": bool(item_data.get("topRatedBuyingExperience")),
+        "shipping_cost": shipping["cost"],
+        "free_shipping": shipping["free"],
         "condition": item_data.get("condition"),
         "location": _location(item_data),
         **_datetime_fields(item_data),
@@ -47,6 +53,8 @@ def _map_item_summary(item_data: ItemSummary, default_currency: str) -> ParsedIt
         "categories": json.dumps(_categories(item_data)),
         "marketplace": item_data.get("listingMarketplaceId"),
         "images": json.dumps(_images(item_data)),
+        "image_count": 1 + len(thumbnails) if _image_url(item_data) else len(thumbnails),
+        "watch_count": item_data.get("watchCount"),
     }
 
 
@@ -144,3 +152,18 @@ def _images(item_data: ItemSummary) -> dict[str, Any]:
             image.get("imageUrl") for image in item_data.get("thumbnailImages", [])
         ],
     }
+
+
+def _shipping_details(
+    item_data: ItemSummary, default_currency: str
+) -> dict[str, Any]:
+    """Pull the cheapest shipping option (cost, free flag) from the response."""
+    options = item_data.get("shippingOptions") or []
+    if not options:
+        return {"cost": None, "free": None}
+
+    primary = options[0]
+    cost_money = _parse_money(primary.get("shippingCost"), default_currency)
+    cost = cost_money["value"]
+    is_free = cost == 0 or primary.get("type") == "PICKUP"
+    return {"cost": cost, "free": bool(is_free)}

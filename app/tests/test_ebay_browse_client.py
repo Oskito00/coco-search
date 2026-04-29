@@ -104,6 +104,7 @@ def test_search_item_summaries_builds_headers_and_params() -> None:
         "limit": 50,
         "offset": 100,
         "sort": "price",
+        "fieldgroups": "EXTENDED",
         "filter": (
             "itemLocationCountry:GB,buyingOptions:{FIXED_PRICE},"
             "conditions:{NEW},priceCurrency:GBP,price:[10..20]"

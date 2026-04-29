@@ -6,6 +6,7 @@ from typing import Any
 from app.relevance import RelevanceService
 from app.relevance.domain import RelevanceInteraction
 from app.relevance.repository import SqlAlchemyRelevanceRepository
+from app.relevance.scoring import BaselineRelevanceScorer
 import app.relevance.repository as relevance_repository
 
 
@@ -109,20 +110,36 @@ def test_relevance_service_keeps_excluded_keywords_as_hard_filter() -> None:
     assert decision.reasons == ("excluded_keywords_present",)
 
 
-def test_relevance_service_uses_explicit_irrelevant_feedback() -> None:
-    service = RelevanceService(repository=FakeRepository(Feedback(is_relevant=False)))
+def test_relevance_service_default_scorer_passes_through_after_hard_filters() -> None:
+    """Default scorer notifies any item that survives hard filters."""
+    service = RelevanceService(repository=FakeRepository())
     saved_search = _saved_search()
     item = _item(title="Pokemon Charizard Holo")
 
     decision = service.should_notify(user_id=1, saved_search=saved_search, item=item)
 
-    assert decision.should_notify is False
-    assert decision.score == 0.0
-    assert decision.reasons == ("user_marked_irrelevant",)
+    assert decision.should_notify is True
+    assert decision.reasons == ("pass_through",)
+
+
+def test_relevance_service_does_not_consult_legacy_feedback_override() -> None:
+    """Negative legacy feedback no longer suppresses notifications post-filter."""
+    service = RelevanceService(
+        repository=FakeRepository(Feedback(is_relevant=False))
+    )
+    saved_search = _saved_search()
+    item = _item(title="Pokemon Charizard Holo")
+
+    decision = service.should_notify(user_id=1, saved_search=saved_search, item=item)
+
+    assert decision.should_notify is True
+    assert decision.reasons == ("pass_through",)
 
 
 def test_relevance_service_scores_matching_items_with_baseline_heuristic() -> None:
-    service = RelevanceService(repository=FakeRepository())
+    service = RelevanceService(
+        repository=FakeRepository(), scorer=BaselineRelevanceScorer()
+    )
     saved_search = _saved_search()
     item = _item(title="Pokemon Charizard Holo")
 
@@ -134,7 +151,9 @@ def test_relevance_service_scores_matching_items_with_baseline_heuristic() -> No
 
 
 def test_relevance_service_penalizes_likely_accessory_items() -> None:
-    service = RelevanceService(repository=FakeRepository())
+    service = RelevanceService(
+        repository=FakeRepository(), scorer=BaselineRelevanceScorer()
+    )
     saved_search = _saved_search()
     item = _item(title="Pokemon Charizard card case")
 
@@ -233,14 +252,16 @@ def test_legacy_feedback_fallback_still_persists_bool_label(monkeypatch) -> None
 
 
 def test_should_notify_behavior_is_unchanged_by_interaction_support() -> None:
+    """Adding interaction recording must not change the live decision path."""
     service = RelevanceService(repository=FakeRepository(Feedback(is_relevant=False)))
     saved_search = _saved_search()
     item = _item(title="Pokemon Charizard Holo")
 
     decision = service.should_notify(user_id=1, saved_search=saved_search, item=item)
 
-    assert decision.should_notify is False
-    assert decision.reasons == ("user_marked_irrelevant",)
+    # Default scorer is pass-through; legacy feedback is no longer consulted.
+    assert decision.should_notify is True
+    assert decision.reasons == ("pass_through",)
 
 
 def _saved_search(

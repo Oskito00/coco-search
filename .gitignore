@@ -1,6 +1,8 @@
 .env
 __pycache__/
 .local/
+.claude/
+ebay_credentials.json
 known_items.json
 item_details.json
 venv/

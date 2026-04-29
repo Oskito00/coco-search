@@ -1,4 +1,9 @@
-"""Notification preferences + Telegram chat-id management."""
+"""Notification preferences + Telegram connect-flow API.
+
+The legacy ``PUT /telegram`` chat-id paste route is kept for now so existing
+clients keep working, but the recommended flow is the deep-link handshake:
+``POST /telegram/start-link`` -> open Telegram -> webhook completes binding.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +15,7 @@ from app.api.responses import ok
 from app.api.schemas import Field, get_json, validate
 from app.auth import SCOPE_NOTIFICATIONS_READ, SCOPE_NOTIFICATIONS_WRITE
 from app.extensions import db
+from app.notifications.connectors import TelegramConnector
 from app.notifications.telegram import NotificationManager
 
 bp = Blueprint("notifications", __name__, url_prefix="/notifications")
@@ -53,15 +59,34 @@ def telegram_status():
     return ok(_telegram_view(g.user))
 
 
+@bp.post("/telegram/start-link")
+@require_auth(SCOPE_NOTIFICATIONS_WRITE)
+def telegram_start_link():
+    """Begin the deep-link connect flow; the frontend opens *deep_link*."""
+    instruction = TelegramConnector().start_link(g.user)
+    return ok(
+        {
+            "deep_link": instruction.deep_link,
+            "expires_at": instruction.expires_at.isoformat(),
+            "instructions": instruction.instructions,
+        }
+    )
+
+
 @bp.put("/telegram")
 @require_auth(SCOPE_NOTIFICATIONS_WRITE)
 def telegram_connect():
+    """Legacy chat-id paste flow. Prefer the deep-link handshake instead."""
     payload = validate(get_json(), _TELEGRAM_SCHEMA)
     main = payload["main_chat_id"].strip()
     if not main.lstrip("-").isdigit():
         raise BadRequest("main_chat_id must be numeric", code="invalid_chat_id")
 
-    additional = [str(c).strip() for c in (payload.get("additional_chat_ids") or []) if str(c).strip()]
+    additional = [
+        str(c).strip()
+        for c in (payload.get("additional_chat_ids") or [])
+        if str(c).strip()
+    ]
     g.user.telegram_chat_ids = {"main": main, "additional": additional}
     g.user.telegram_connected = True
     db.session.commit()
@@ -71,9 +96,7 @@ def telegram_connect():
 @bp.delete("/telegram")
 @require_auth(SCOPE_NOTIFICATIONS_WRITE)
 def telegram_disconnect():
-    g.user.telegram_chat_ids = {"main": None, "additional": []}
-    g.user.telegram_connected = False
-    db.session.commit()
+    TelegramConnector().disconnect(g.user)
     return ok(_telegram_view(g.user))
 
 

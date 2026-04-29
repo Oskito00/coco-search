@@ -133,6 +133,8 @@ def test_processor_normalizes_raw_sdk_payload_and_records_new_item_event(
 
     result = SearchItemProcessor(
         item_repository=repository,
+        event_repository=repository,
+        observation_repository=repository,
         notification_service=FakeNotifications(),
     ).process([raw_item], query, notify=False)
 
@@ -165,6 +167,7 @@ def test_processor_persists_domain_events_with_schema_fields(
     result = SearchItemProcessor(
         item_repository=item_repository,
         event_repository=event_repository,
+        observation_repository=item_repository,
         notification_service=FakeNotifications(),
     ).process(
         [{"ebay_id": "abc", "price": 75.0, "end_time": end_time}],
@@ -204,6 +207,7 @@ def test_processor_persists_observations_with_schema_fields(
 
     SearchItemProcessor(
         item_repository=item_repository,
+        event_repository=item_repository,
         observation_repository=observation_repository,
         notification_service=FakeNotifications(),
     ).process(
@@ -255,6 +259,8 @@ def test_processor_records_update_and_price_drop_events(monkeypatch: Any) -> Non
 
     result = SearchItemProcessor(
         item_repository=repository,
+        event_repository=repository,
+        observation_repository=repository,
         notification_service=FakeNotifications(),
     ).process(
         [{"ebay_id": "abc", "title": "New title", "price": 75.0}], query, notify=False
@@ -287,6 +293,8 @@ def test_processor_records_auction_ending_event(monkeypatch: Any) -> None:
     end_time = datetime.now(timezone.utc) + timedelta(hours=2)
     result = SearchItemProcessor(
         item_repository=repository,
+        event_repository=repository,
+        observation_repository=repository,
         notification_service=FakeNotifications(),
     ).process(
         [

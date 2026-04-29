@@ -55,6 +55,26 @@ Current endpoint methods:
 - `get_rate_limits()` for `GET /developer/analytics/v1_beta/rate_limit`.
 - `get_browse_limits(...)` and `get_search_limits(...)` for rate-limit extraction helpers.
 
+## Browse fields
+
+`browse/search_requests.py::build_search_params` always sets
+`fieldgroups=EXTENDED`. This unlocks `shortDescription` on each item summary
+at no additional API-call cost (verified live against `EBAY_GB`). Per-item
+structured `aspects` are *not* returned by `EXTENDED` and remain unavailable
+without per-item `getItem` calls.
+
+`browse/parsers.py::_map_item_summary` captures the following fields beyond
+the original set:
+
+- `short_description` (from `shortDescription`)
+- `top_rated_seller` (from `topRatedBuyingExperience`)
+- `shipping_cost` and derived `free_shipping` (from `shippingOptions[0]`)
+- `watch_count` (from `watchCount`)
+- `image_count` (derived: `image` + `len(thumbnailImages)`)
+
+These flow through `app.items.normalization` and land on the `items` table
+columns added by Alembic revision `b2c3d4e5f6a7_item_extended_fields`.
+
 The SDK no longer imports Flask, SQLAlchemy, app utilities, Stripe/billing code, or Coco search filtering.
 
 ## Current package layout

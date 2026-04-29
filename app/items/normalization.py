@@ -23,6 +23,8 @@ def normalize_item_payload(item_data: dict[str, Any]) -> dict[str, Any]:
         "ebay_id": item_data.get("ebay_id") or item_data.get("itemId"),
         "legacy_id": item_data.get("legacy_id") or item_data.get("legacyItemId"),
         "title": item_data.get("title"),
+        "short_description": item_data.get("short_description")
+        or item_data.get("shortDescription"),
         "price": price,
         "current_bid": current_bid,
         "current_bid_currency": current_bid_currency,
@@ -31,6 +33,17 @@ def normalize_item_payload(item_data: dict[str, Any]) -> dict[str, Any]:
         "image_url": _image_url(item_data),
         "seller": _seller(item_data),
         "seller_rating": _seller_rating(item_data),
+        "top_rated_seller": _bool_value(
+            item_data.get("top_rated_seller")
+            if item_data.get("top_rated_seller") is not None
+            else item_data.get("topRatedBuyingExperience")
+        ),
+        "shipping_cost": _money_value(item_data.get("shipping_cost")),
+        "free_shipping": _bool_value(item_data.get("free_shipping")),
+        "watch_count": _int_value(
+            item_data.get("watch_count") or item_data.get("watchCount")
+        ),
+        "image_count": _int_value(item_data.get("image_count")),
         "condition": item_data.get("condition"),
         "location": location,
         "location_country": location.get("country"),
@@ -51,6 +64,21 @@ def normalize_item_payload(item_data: dict[str, Any]) -> dict[str, Any]:
     }
 
     return {key: value for key, value in normalized.items() if value is not None}
+
+
+def _bool_value(value: Any) -> bool | None:
+    if value is None:
+        return None
+    return bool(value)
+
+
+def _int_value(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _money_value(value: Any) -> float | None:
