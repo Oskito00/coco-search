@@ -33,11 +33,16 @@ def build_search_params(
     request: SearchRequest,
     filter_value: str | None,
 ) -> dict[str, str | int]:
-    """Build query params for the item summary search endpoint."""
+    """Build query params for the item summary search endpoint.
+
+    ``fieldgroups=EXTENDED`` unlocks ``shortDescription`` on each item summary
+    at no extra API-call cost (verified against the GB marketplace).
+    """
     params: dict[str, str | int] = {
         "q": request.keywords,
         "limit": request.limit,
         "offset": request.offset,
+        "fieldgroups": "EXTENDED",
     }
 
     if request.sort_order:

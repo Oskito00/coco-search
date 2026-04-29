@@ -54,6 +54,8 @@ class Config:
 
     # Telegram
     TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+    TELEGRAM_BOT_USERNAME = os.environ.get("TELEGRAM_BOT_USERNAME")
+    TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET")
 
     # eBay
     EBAY_ENV = os.environ.get("EBAY_ENV", "sandbox")

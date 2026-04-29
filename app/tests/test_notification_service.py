@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
 
-from app.notifications.delivery import NotificationSender, RenderedNotification
+from app.notifications.channels import DeliveryResult
+from app.notifications.events import NotificationEvent
 from app.notifications.service import EventNotificationService
 
 
@@ -49,14 +50,21 @@ class NotificationRepositoryStub:
         self.failed.append(record)
 
 
-class SenderStub(NotificationSender):
-    def __init__(self, sent: bool = True) -> None:
-        self.delivery_result = sent
-        self.sent: list[tuple[Any, RenderedNotification]] = []
+@dataclass
+class DispatcherStub:
+    """Captures dispatch calls and reports a configurable delivery outcome."""
 
-    def send(self, user: Any, notification: RenderedNotification) -> bool:
-        self.sent.append((user, notification))
-        return self.delivery_result
+    delivered: bool = True
+    calls: list[tuple[Any, NotificationEvent, list[Any]]] = field(default_factory=list)
+
+    def dispatch(
+        self, user: Any, event: NotificationEvent, payloads: list[Any]
+    ) -> list[DeliveryResult]:
+        self.calls.append((user, event, list(payloads)))
+        return [
+            DeliveryResult(channel="telegram", delivered=self.delivered),
+            DeliveryResult(channel="email", delivered=self.delivered),
+        ]
 
 
 def test_notify_search_events_filters_by_relevance_and_records_notifications() -> None:
@@ -71,20 +79,20 @@ def test_notify_search_events_filters_by_relevance_and_records_notifications() -
     )
     relevance = RelevanceServiceStub(allowed_item_ids={1})
     records = NotificationRepositoryStub()
-    sender = SenderStub()
+    dispatcher = DispatcherStub()
 
     counts = EventNotificationService(
         user_repository=UserRepositoryStub(user),
         relevance_service=relevance,
         notification_repository=records,
-        sender=sender,
+        dispatcher=dispatcher,
     ).notify_search_events(query, result)
 
     assert counts == {"new_items": 1, "price_drops": 0, "auction_alerts": 0}
     assert len(relevance.calls) == 2
     assert relevance.calls[0][1].keywords == "sony camera"
-    assert sender.sent[0][1].notification_type == "new_items"
-    assert sender.sent[0][1].payloads == [first_item]
+    assert dispatcher.calls[0][1].notification_type == "new_items"
+    assert dispatcher.calls[0][2] == [first_item]
     assert records.records == [
         {
             "query_id": query.query_id,
@@ -111,15 +119,15 @@ def test_notify_search_events_respects_disabled_preferences() -> None:
         price_drops=[],
         ending_auctions=[],
     )
-    sender = SenderStub()
+    dispatcher = DispatcherStub()
 
     counts = EventNotificationService(
         user_repository=UserRepositoryStub(user),
-        sender=sender,
+        dispatcher=dispatcher,
     ).notify_search_events(query, result)
 
     assert counts == {"new_items": 0, "price_drops": 0, "auction_alerts": 0}
-    assert sender.sent == []
+    assert dispatcher.calls == []
 
 
 def test_notify_search_events_preserves_legacy_event_buckets() -> None:
@@ -138,21 +146,21 @@ def test_notify_search_events_preserves_legacy_event_buckets() -> None:
         price_drops=[{"item": dropped_item, "old_price": 20, "new_price": 15}],
         ending_auctions=[auction_item],
     )
-    sender = SenderStub()
+    dispatcher = DispatcherStub()
 
     counts = EventNotificationService(
         user_repository=UserRepositoryStub(user),
-        sender=sender,
+        dispatcher=dispatcher,
     ).notify_search_events(query, result)
 
     assert counts == {"new_items": 1, "price_drops": 1, "auction_alerts": 1}
-    assert [sent[1].notification_type for sent in sender.sent] == [
+    assert [call[1].notification_type for call in dispatcher.calls] == [
         "new_items",
         "price_drops",
         "auction_alerts",
     ]
-    assert sender.sent[1][1].payloads == result.price_drops
-    assert sender.sent[2][1].payloads == result.ending_auctions
+    assert dispatcher.calls[1][2] == result.price_drops
+    assert dispatcher.calls[2][2] == result.ending_auctions
 
 
 def test_notify_search_events_marks_records_failed_when_delivery_fails() -> None:
@@ -169,7 +177,7 @@ def test_notify_search_events_marks_records_failed_when_delivery_fails() -> None
     counts = EventNotificationService(
         user_repository=UserRepositoryStub(user),
         notification_repository=records,
-        sender=SenderStub(sent=False),
+        dispatcher=DispatcherStub(delivered=False),
     ).notify_search_events(query, result)
 
     assert counts == {"new_items": 1, "price_drops": 0, "auction_alerts": 0}

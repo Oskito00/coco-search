@@ -3,7 +3,7 @@ from typing import Any
 from app.relevance.domain import RelevanceDecision
 from app.relevance.features import extract_item_features
 from app.relevance.repository import RelevanceRepository, SqlAlchemyRelevanceRepository
-from app.relevance.scoring import BaselineRelevanceScorer, RelevanceScorer
+from app.relevance.scoring import PassThroughScorer, RelevanceScorer
 
 
 class RelevanceService:
@@ -15,7 +15,7 @@ class RelevanceService:
         scorer: RelevanceScorer | None = None,
     ) -> None:
         self.repository = repository or SqlAlchemyRelevanceRepository()
-        self.scorer = scorer or BaselineRelevanceScorer()
+        self.scorer = scorer or PassThroughScorer()
 
     def extract_features(self, saved_search: Any, item: Any) -> dict[str, Any]:
         """Extract model-ready features from a saved search and item."""
@@ -48,7 +48,12 @@ class RelevanceService:
         saved_search: Any,
         item: Any,
     ) -> RelevanceDecision:
-        """Compose hard filters, explicit feedback, and baseline score."""
+        """Apply hard filters then defer to the configured scorer.
+
+        Legacy thumbs-up/down feedback is no longer consulted here — the
+        future ML scorer should derive that signal from
+        ``UserItemInteraction`` instead.
+        """
 
         features = self.extract_features(saved_search, item)
         hard_filter_reasons = _hard_filter_failures(features)
@@ -59,14 +64,6 @@ class RelevanceService:
                 reasons=tuple(hard_filter_reasons),
                 features=features,
             )
-
-        feedback_decision = _feedback_decision(
-            self.repository.get_feedback(user_id, saved_search, item),
-            features,
-        )
-        if feedback_decision is not None:
-            return feedback_decision
-
         return self.scorer.score_features(features)
 
 
@@ -85,27 +82,6 @@ def _hard_filter_failures(features: dict[str, Any]) -> list[str]:
     if not _buying_options_match(features):
         failures.append("buying_options_mismatch")
     return failures
-
-
-def _feedback_decision(
-    feedback: Any | None,
-    features: dict[str, Any],
-) -> RelevanceDecision | None:
-    if feedback is None or getattr(feedback, "is_relevant", None) is None:
-        return None
-    if feedback.is_relevant:
-        return RelevanceDecision(
-            score=1.0,
-            should_notify=True,
-            reasons=("user_marked_relevant",),
-            features=features,
-        )
-    return RelevanceDecision(
-        score=0.0,
-        should_notify=False,
-        reasons=("user_marked_irrelevant",),
-        features=features,
-    )
 
 
 def _price_matches(features: dict[str, Any]) -> bool:

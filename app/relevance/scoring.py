@@ -11,6 +11,23 @@ class RelevanceScorer(Protocol):
         """Score extracted features and return a notification decision."""
 
 
+class PassThroughScorer:
+    """Default scorer: notify everything that survived hard filters.
+
+    The future ML/heuristic model plugs in here by implementing the
+    ``RelevanceScorer`` protocol. Until then the relevance layer simply
+    forwards items past the hard-filter check.
+    """
+
+    def score_features(self, features: dict[str, Any]) -> RelevanceDecision:
+        return RelevanceDecision(
+            score=1.0,
+            should_notify=True,
+            reasons=("pass_through",),
+            features=features,
+        )
+
+
 class BaselineRelevanceScorer:
     """Small rules baseline that can later be replaced by a trained model."""
 
